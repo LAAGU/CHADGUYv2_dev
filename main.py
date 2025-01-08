@@ -1,6 +1,6 @@
 import discord
 import time
-from discord import ui, Button, Embed
+from discord import ui, Button, Embed, Option
 from datetime import date
 import json
 import threading
@@ -150,8 +150,14 @@ async def test_agents(ctx):
         await asyncio.sleep(1)
     await ctx.send("All agents sent.")
 
-
-
+@bot.slash_command(guild_ids=servers, name='clear', description='Clears chat messages.')
+@isStaff()
+@isBetaUser()
+async def clear(ctx,amount=1):
+    await ctx.defer(ephemeral=True)
+    await ctx.channel.purge(limit=int(amount))
+    await ctx.respond(f"- **Cleared `{amount}` message(s).**",ephemeral=True)
+    
 
 
 
