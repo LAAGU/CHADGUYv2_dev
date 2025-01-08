@@ -6,6 +6,12 @@ import json
 import threading
 import firebase_admin
 from firebase_admin import credentials,firestore
+from functions import *
+import random
+from functools import wraps
+import asyncio
+
+
 
 cred = credentials.Certificate("./cbv2pk.json")
 firebase_admin.initialize_app(cred)
@@ -65,17 +71,84 @@ async def on_ready():
     print(f'BOT is running as {bot.user}')
 
 servers = [1055476996077015141]
-staffRoles = [1076075894722023435]
+staffRole = 1076075894722023435
+earlyAccessRole = 1097927212784693298
+
+
+def isBetaUser():
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(ctx, *args, **kwargs):
+            if not isinstance(ctx.author, discord.Member):
+                ctx.author = await ctx.guild.fetch_member(ctx.author.id)
+
+            role = discord.utils.get(ctx.author.roles, id=earlyAccessRole)
+            if role:
+                return await func(ctx, *args, **kwargs)
+            else:
+                await ctx.respond("- **You do not have __Early Access Role__ to use this command.**", ephemeral=True)
+                return
+        return wrapper
+    return decorator
+
+def isStaff():
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(ctx, *args, **kwargs):
+            if not isinstance(ctx.author, discord.Member):
+                ctx.author = await ctx.guild.fetch_member(ctx.author.id)
+
+            role = discord.utils.get(ctx.author.roles, id=staffRole)
+            if role:
+                return await func(ctx, *args, **kwargs)
+            else:
+                await ctx.respond("- **You do not have the required permissions to use this command.**", ephemeral=True)
+                return
+        return wrapper
+    return decorator
+
 
 @bot.slash_command(guild_ids=servers,name='latency',description='To get the bots response time.')
+@isBetaUser()
 async def latency(ctx):
     await ctx.respond(f"**Latency :** `{int(bot.latency*1000)}ms`")
 
+@bot.slash_command(guild_ids=servers,name='agent',description='Get a random agent.')
+@isBetaUser()
+async def agent(ctx):
+   embed = discord.Embed(title="Your Agent Is -", description=f"## LOADING...\n- ...", color=discord.Color.yellow())
+   embed.set_image(url="https://cdn.dribbble.com/users/756637/screenshots/2249870/slot-machine-main-2.gif")
+   msg = await ctx.respond(embed=embed)
+   await asyncio.sleep(1.5)
+   agent = GetAgent(random.randint(0,27))
+   embed.set_image(url=random.choice(agent['img']))
+   embed.description = f"## {agent['name']}\n- {agent['info']}"
+   await msg.edit(embed=embed)
 
 
 
-
-
+@bot.slash_command(guild_ids=servers, name='test_agents', description='test random agent command.')
+@isStaff()
+@isBetaUser()
+async def test_agents(ctx):
+    list = GetAgentList()
+    await ctx.respond("Sending all agents 1 by 1...")
+    await asyncio.sleep(1)
+    for agent in list:
+        try:
+            await ctx.send(f"UPCOMING - {agent['name']}")
+            embed = discord.Embed(
+                title="Your Agent Is -",
+                description=f"## {agent['name']}\n- {agent['info']}",
+                color=discord.Color.yellow(),
+            )
+            embed.set_image(url=random.choice(agent['img']))
+            await ctx.send(embed=embed)
+        except Exception as e:
+            print(e)
+            await ctx.send(f"Error in Sending - {agent['name']}")
+        await asyncio.sleep(1)
+    await ctx.send("All agents sent.")
 
 
 
