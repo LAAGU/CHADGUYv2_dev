@@ -78,7 +78,6 @@ staffRole = 1076075894722023435
 earlyAccessRole = 1097927212784693298
 commandLogsChannel = 1325869256486686782
 
-commandTimeout = {}
 
 bot = discord.Bot()
 
@@ -147,6 +146,9 @@ async def on_message(message):
     if message.author.bot:
         return    
 
+commandTimeout = {}
+commandTimeoutCount = {}
+
 def CommandSpamProtection(timeout=5):
     def decorator(func):
         @wraps(func)
@@ -154,20 +156,37 @@ def CommandSpamProtection(timeout=5):
             current_time = time.time()
             user_id = ctx.author.id
 
+            if user_id not in commandTimeoutCount:
+                commandTimeoutCount[user_id] = 0
+
             if user_id in commandTimeout:
                 time_left = commandTimeout[user_id] - current_time
                 if time_left > 0:
-                    embed = discord.Embed(title="<:csp:1326700853930754080> You are on cooldown !",description=f"### Time Left :\n- **{int(time_left)}s**",color=discord.Color.red())
+                    commandTimeoutCount[user_id] += 1
+                    embed = discord.Embed(
+                        title="<:csp:1326700853930754080> You are on cooldown!",
+                        description=f"### Time Left :\n- **{int(time_left)}s**",
+                        color=discord.Color.red()
+                    )
                     embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1128242859078852648/1326701102237880330/csp_logo.png?ex=6780622f&is=677f10af&hm=c49f053ef0bb3ce7b8a14f7ce540dfd02d5650a534a6efa02c9c782c5b3a78ad&")
-                    embed.set_footer(text="Spam Protection By sukrit_thakur",icon_url="https://cdn.discordapp.com/avatars/774179600800284682/f90d1b3530e364ec8572ce92463c6c00.png?size=1024")
+                    embed.set_footer(
+                        text="Spam Protection By sukrit_thakur",
+                        icon_url="https://cdn.discordapp.com/avatars/774179600800284682/f90d1b3530e364ec8572ce92463c6c00.png?size=1024"
+                    )
                     await ctx.respond(embed=embed, ephemeral=True)
-                    commandTimeout[user_id] = current_time + timeout
+
+                    if commandTimeoutCount[user_id] > 2:
+                        commandTimeout[user_id] = current_time + timeout * 2
+                        await asyncio.sleep(timeout * 2)
+                        commandTimeout.pop(user_id, None)
                     return
 
             await func(ctx, *args, **kwargs)
 
             commandTimeout[user_id] = current_time + timeout
-            threading.Timer(timeout, lambda: commandTimeout.pop(user_id, None)).start()
+            commandTimeoutCount[user_id] = 0
+            await asyncio.sleep(timeout)
+            commandTimeout.pop(user_id, None)
 
         return wrapper
     return decorator
