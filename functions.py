@@ -141,3 +141,31 @@ def GetAgent(index : int) -> dict:
 
 def GetAgentList()-> list[dict]:
     return agentArray
+
+
+def create_mapping():
+    characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:'\",.<>?/ \\"
+    replacements = [
+        "😀", "😁", "😂", "😃", "😄", "😅", "😆", "😇", "😈", "😉", "😊", "😋", "😌", "😍", "😎", "😏",
+        "😐", "😑", "😒", "😓", "😔", "😕", "😖", "😗", "😘", "😙", "😚", "😛", "😜", "😝", "😞", "😟",
+        "😠", "😡", "😢", "😣", "😤", "😥", "😦", "😧", "😨", "😩", "😪", "😫", "😬", "😭", "😮", "😯",
+        "😰", "😱", "😲", "😳", "😴", "😵", "😶", "😷", "😸", "😹", "😺", "😻", "😼", "😽", "😾", "😿",
+        "🚀", "🍎", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🍒", "🍍", "🥝", "🥥", "🥑", "🥒", "🥦", "🥩",
+        "🍔", "🍟", "🍕", "🌭", "🍿", "🥗", "🥘", "🥙", "🥪", "🥣", "🥡", "🥢", "☕",
+    ]
+
+    assert len(characters) == len(replacements), "Character and replacement lengths must match."
+
+    encryption_map = dict(zip(characters, replacements))
+    decryption_map = {v: k for k, v in encryption_map.items()}
+
+    return encryption_map, decryption_map
+
+def encrypt_string(token, encryption_map):
+    encrypted = ''.join(encryption_map.get(char, char) for char in token)
+    return encrypted
+
+def decrypt_string(encrypted_token, decryption_map):
+    decrypted = ''.join(decryption_map.get(char, char) for char in encrypted_token)
+    return decrypted
+

@@ -10,7 +10,7 @@ from functions import *
 import random
 from functools import wraps
 import asyncio
-
+encryption_map, decryption_map = create_mapping()
 
 
 cred = credentials.Certificate("./cbv2pk.json")
@@ -24,7 +24,7 @@ def rdb(collection : str,document_id : str):
     if doc_ref.exists:
        return doc_ref.to_dict()
     else:
-       print("Document does not exist")
+       return None
 
 # [Create in Database]
 def cdb(collection_name : str,data : dict,custom_id : str = None):
@@ -60,6 +60,17 @@ def writeJson(filePath : str,key : str,value : any):
     except Exception as e:
         print(e)           
 
+def addMoney(userID : int,amount : int | float,type : str = "bank"):
+   if type == "wallet":
+      db.collection("accounts").document(str(userID)).update({"money":{"wallet": firestore.Increment(amount)}})
+   else:
+      db.collection("accounts").document(str(userID)).update({"money":{"bank": firestore.Increment(amount)}})
+
+def removeMoney(userID : int,amount : int | float,type : str = "bank"):
+   if type == "wallet":
+      db.collection("accounts").document(str(userID)).update({"money":{"wallet": firestore.Increment(-amount)}})
+   else:
+      db.collection("accounts").document(str(userID)).update({"money":{"bank": firestore.Increment(-amount)}})
 
 
 
@@ -75,6 +86,46 @@ staffRole = 1076075894722023435
 earlyAccessRole = 1097927212784693298
 
 
+commandTimeout = {}
+
+def CommandSpamProtection(timeout=5):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(ctx, *args, **kwargs):
+            current_time = time.time()
+            user_id = ctx.author.id
+
+            if user_id in commandTimeout:
+                time_left = commandTimeout[user_id] - current_time
+                if time_left > 0:
+                    embed = discord.Embed(title="You are on cooldown <:csp:1326700853930754080>",description=f"### Time Left :\n- **{int(time_left)}s**",color=discord.Color.red())
+                    embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1128242859078852648/1326701102237880330/csp_logo.png?ex=6780622f&is=677f10af&hm=c49f053ef0bb3ce7b8a14f7ce540dfd02d5650a534a6efa02c9c782c5b3a78ad&")
+                    embed.set_footer(text="Command Spam Protection By sukrit_thakur",icon_url="https://cdn.discordapp.com/avatars/774179600800284682/f90d1b3530e364ec8572ce92463c6c00.png?size=1024")
+                    await ctx.respond(embed=embed, ephemeral=True)
+                    return
+
+            await func(ctx, *args, **kwargs)
+
+            commandTimeout[user_id] = current_time + timeout
+            threading.Timer(timeout, lambda: commandTimeout.pop(user_id, None)).start()
+
+        return wrapper
+    return decorator
+
+def hasAccount():
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(ctx, *args, **kwargs):
+            hasAcc = rdb("accounts",str(ctx.author.id))
+            if hasAcc != None:
+                return await func(ctx, *args, **kwargs)
+            else:
+                await ctx.respond("- **You do not have an account to use this command <:xmark:1326705481854619680>, use the command `/register` to create one.**", ephemeral=True)
+                return
+        return wrapper
+    return decorator
+
+
 def isBetaUser():
     def decorator(func):
         @wraps(func)
@@ -86,7 +137,7 @@ def isBetaUser():
             if role:
                 return await func(ctx, *args, **kwargs)
             else:
-                await ctx.respond("- **You do not have __Early Access Role__ to use this command.**", ephemeral=True)
+                await ctx.respond("- **You do not have __Early Access Role__ to use this command <:xmark:1326705481854619680>**", ephemeral=True)
                 return
         return wrapper
     return decorator
@@ -102,18 +153,20 @@ def isStaff():
             if role:
                 return await func(ctx, *args, **kwargs)
             else:
-                await ctx.respond("- **You do not have the required permissions to use this command.**", ephemeral=True)
+                await ctx.respond("- **You do not have the required permissions to use this command <:xmark:1326705481854619680>**", ephemeral=True)
                 return
         return wrapper
     return decorator
 
 
 @bot.slash_command(guild_ids=servers,name='latency',description='To get the bots response time.')
+@CommandSpamProtection()
 @isBetaUser()
 async def latency(ctx):
     await ctx.respond(f"**Latency :** `{int(bot.latency*1000)}ms`")
 
 @bot.slash_command(guild_ids=servers,name='agent',description='Get a random agent.')
+@CommandSpamProtection(10)
 @isBetaUser()
 async def agent(ctx):
    embed = discord.Embed(title="Your Agent Is -", description=f"## LOADING...\n- ...", color=discord.Color.yellow())
@@ -128,6 +181,7 @@ async def agent(ctx):
 
 
 @bot.slash_command(guild_ids=servers, name='test_agents', description='test random agent command.')
+@CommandSpamProtection()
 @isStaff()
 @isBetaUser()
 async def test_agents(ctx):
@@ -151,170 +205,50 @@ async def test_agents(ctx):
     await ctx.send("All agents sent.")
 
 @bot.slash_command(guild_ids=servers, name='clear', description='Clears chat messages.')
+@CommandSpamProtection()
 @isStaff()
 @isBetaUser()
 async def clear(ctx,amount=1):
     await ctx.defer(ephemeral=True)
+    if int(amount) > 100:
+        await ctx.respond("- **You can't clear more than 100 messages <:xmark:1326705481854619680>**",ephemeral=True)
+        return
     await ctx.channel.purge(limit=int(amount))
-    await ctx.respond(f"- **Cleared `{amount}` message(s).**",ephemeral=True)
+    await ctx.respond(f"- **Cleared `{amount}` message(s) <:tick:1326705494198321294>**",ephemeral=True)
     
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-bot.run(readJson('./config.json','TOKEN'))    
+@bot.slash_command(guild_ids=servers, name='register', description='Create an account.')
+@CommandSpamProtection(15)
+@isBetaUser()
+async def register(ctx):
+    data = {
+       "name": ctx.author.name,
+       "money": {"wallet":0,"bank":500},
+       "createdOn": firestore.SERVER_TIMESTAMP,
+       "inventory": [
+          {
+             "id": "phone",
+             "name": "Phone",
+             "emoji": "<:phone:1326689224749219982>",
+             "amount": 1
+          }
+       ]
+    }
+    await ctx.defer(ephemeral=True)
+    if (rdb("accounts",str(ctx.author.id)) != None):
+     return await ctx.respond(f"- **You already have an account <:xmark:1326705481854619680>**",ephemeral=True)
+    cdb("accounts",data,str(ctx.author.id))
+    await ctx.respond(f"- **Account created successfully <:tick:1326705494198321294>**",ephemeral=True)
+
+
+@bot.slash_command(guild_ids=servers, name='balance', description='Check your balance.')
+@CommandSpamProtection(10)
+@isBetaUser()
+@hasAccount()
+async def balance(ctx,hidden: str = "true"):
+    await ctx.defer(ephemeral=hidden.lower() not in ["false", "no"])
+    data = rdb("accounts",str(ctx.author.id))
+    embed = discord.Embed(title=f"Your Balance {ctx.author.display_name}", description=f"## <:_bank:1326706646977875988>Bank : `{'{:,}'.format(data['money']['bank'])}`\n### <:_wallet:1326706644591312906> Wallet : `{'{:,}'.format(data['money']['wallet'])}`", color=discord.Color.green())
+    await ctx.respond(embed=embed,ephemeral=hidden=="True")
+
+bot.run(decrypt_string(rdb('about-bot','settings')["TOKEN"],decryption_map))    
