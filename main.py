@@ -73,7 +73,12 @@ def removeMoney(userID : int,amount : int | float,type : str = "bank"):
       db.collection("accounts").document(str(userID)).update({"money":{"bank": firestore.Increment(-amount)}})
 
 
+servers = [1055476996077015141]
+staffRole = 1076075894722023435
+earlyAccessRole = 1097927212784693298
+commandLogsChannel = 1325869256486686782
 
+commandTimeout = {}
 
 bot = discord.Bot()
 
@@ -81,12 +86,18 @@ bot = discord.Bot()
 async def on_ready():
     print(f'BOT is running as {bot.user}')
 
-servers = [1055476996077015141]
-staffRole = 1076075894722023435
-earlyAccessRole = 1097927212784693298
+@bot.event
+async def on_application_command(ctx: discord.ApplicationContext):
+    user = ctx.author
+    command_name = ctx.command.name
+    command_id = ctx.command.id
+    options = ctx.interaction.data.get('options', [])
+    args = [option['value'] for option in options]
+    embed = discord.Embed(title="Command Executed By An User",description=f"```fix\nName: {user.name}\nID: {user.id}\nCommandName: {command_name}\nCommandID: {command_id}\nArguments: {str(','.join(args))}\nTime: {time.strftime('%d-%m-%Y %H:%M:%S', time.localtime())}\n```", color=discord.Color.blue())
+    channel = bot.get_channel(commandLogsChannel)
+    await channel.send(embed=embed)
 
 
-commandTimeout = {}
 
 def CommandSpamProtection(timeout=5):
     def decorator(func):
@@ -158,6 +169,8 @@ def isStaff():
                 return
         return wrapper
     return decorator
+
+
 
 
 @bot.slash_command(guild_ids=servers,name='latency',description='To get the bots response time.')
