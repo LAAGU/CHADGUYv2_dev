@@ -98,6 +98,7 @@ async def on_application_command(ctx: discord.ApplicationContext):
     await channel.send(embed=embed)
 
 messageTimeout = {}
+TimeoutCount = {}
 
 def MessageSpamProtection(timeout):
     def decorator(func):
@@ -106,31 +107,33 @@ def MessageSpamProtection(timeout):
             current_time = time.time()
             user_id = message.author.id
 
+            if message.author.bot:
+                return await func(message, *args, **kwargs)
+
             if user_id in messageTimeout:
                 time_left = messageTimeout[user_id] - current_time
-                if time_left > 0:
-                    await message.delete()
-                    
-                    embed = discord.Embed(
-                        title="<:csp:1326700853930754080> You are on cooldown!",
-                        description=f"### Time Left:\n- **{int(time_left)}s**",
+                embed = discord.Embed(
+                        title="<:csp:1326700853930754080> Slow Down !",
+                        description=f"### You are Going Too Fast!",
                         color=discord.Color.red()
                     )
-                    embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1128242859078852648/1326701102237880330/csp_logo.png?ex=6780622f&is=677f10af&hm=c49f053ef0bb3ce7b8a14f7ce540dfd02d5650a534a6efa02c9c782c5b3a78ad&")
-                    embed.set_footer(
-                        text="Message Spam Protection By sukrit_thakur",
+                embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1128242859078852648/1326701102237880330/csp_logo.png?ex=6780622f&is=677f10af&hm=c49f053ef0bb3ce7b8a14f7ce540dfd02d5650a534a6efa02c9c782c5b3a78ad&")
+                embed.set_footer(
+                        text="Spam Protection By sukrit_thakur",
                         icon_url="https://cdn.discordapp.com/avatars/774179600800284682/f90d1b3530e364ec8572ce92463c6c00.png?size=1024"
                     )
-                    try:
-                        messageTimeout[user_id] = current_time + timeout
-                        # msg = await message.channel.send(embed=embed)
-                        # await msg.delete(delay=2)
-                    except discord.Forbidden:
-                        pass  
+                if time_left > 0:
+                    await message.delete()
+                    if TimeoutCount[user_id] < 1:
+                        TimeoutCount[user_id] += 1
+                    else:
+                        TimeoutCount[user_id] += 1   
+                        msg = await message.channel.send(embed=embed)
+                        await msg.delete(delay=2)
                     return
 
             await func(message, *args, **kwargs)
-
+            TimeoutCount[user_id] = 0
             messageTimeout[user_id] = current_time + timeout
             threading.Timer(timeout, lambda: messageTimeout.pop(user_id, None)).start()
 
@@ -156,7 +159,7 @@ def CommandSpamProtection(timeout=5):
                 if time_left > 0:
                     embed = discord.Embed(title="<:csp:1326700853930754080> You are on cooldown !",description=f"### Time Left :\n- **{int(time_left)}s**",color=discord.Color.red())
                     embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1128242859078852648/1326701102237880330/csp_logo.png?ex=6780622f&is=677f10af&hm=c49f053ef0bb3ce7b8a14f7ce540dfd02d5650a534a6efa02c9c782c5b3a78ad&")
-                    embed.set_footer(text="Command Spam Protection By sukrit_thakur",icon_url="https://cdn.discordapp.com/avatars/774179600800284682/f90d1b3530e364ec8572ce92463c6c00.png?size=1024")
+                    embed.set_footer(text="Spam Protection By sukrit_thakur",icon_url="https://cdn.discordapp.com/avatars/774179600800284682/f90d1b3530e364ec8572ce92463c6c00.png?size=1024")
                     await ctx.respond(embed=embed, ephemeral=True)
                     commandTimeout[user_id] = current_time + timeout
                     return
