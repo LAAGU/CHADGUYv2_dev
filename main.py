@@ -98,10 +98,11 @@ def CommandSpamProtection(timeout=5):
             if user_id in commandTimeout:
                 time_left = commandTimeout[user_id] - current_time
                 if time_left > 0:
-                    embed = discord.Embed(title="You are on cooldown <:csp:1326700853930754080>",description=f"### Time Left :\n- **{int(time_left)}s**",color=discord.Color.red())
+                    embed = discord.Embed(title="<:csp:1326700853930754080> You are on cooldown !",description=f"### Time Left :\n- **{int(time_left)}s**",color=discord.Color.red())
                     embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1128242859078852648/1326701102237880330/csp_logo.png?ex=6780622f&is=677f10af&hm=c49f053ef0bb3ce7b8a14f7ce540dfd02d5650a534a6efa02c9c782c5b3a78ad&")
                     embed.set_footer(text="Command Spam Protection By sukrit_thakur",icon_url="https://cdn.discordapp.com/avatars/774179600800284682/f90d1b3530e364ec8572ce92463c6c00.png?size=1024")
                     await ctx.respond(embed=embed, ephemeral=True)
+                    commandTimeout[user_id] = current_time + timeout
                     return
 
             await func(ctx, *args, **kwargs)
