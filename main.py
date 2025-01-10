@@ -1,6 +1,8 @@
 import discord
 import time
 from discord import ui, Button, Embed, Option
+from discord.ext import commands
+from typing import Annotated
 from datetime import date
 import json
 import threading
@@ -60,26 +62,30 @@ def writeJson(filePath : str,key : str,value : any):
     except Exception as e:
         print(e)           
 
-def addMoney(userID : int,amount : int | float,type : str = "bank"):
-   if type == "wallet":
-      db.collection("accounts").document(str(userID)).update({"money":{"wallet": firestore.Increment(amount)}})
-   else:
-      db.collection("accounts").document(str(userID)).update({"money":{"bank": firestore.Increment(amount)}})
+def addMoney(userID: int, amount: int | float, type: str = "bank"):
+    if type == "wallet":
+        db.collection("accounts").document(str(userID)).update({"money.wallet": firestore.Increment(amount)})
+    else:
+        db.collection("accounts").document(str(userID)).update({"money.bank": firestore.Increment(amount)})
 
-def removeMoney(userID : int,amount : int | float,type : str = "bank"):
-   if type == "wallet":
-      db.collection("accounts").document(str(userID)).update({"money":{"wallet": firestore.Increment(-amount)}})
-   else:
-      db.collection("accounts").document(str(userID)).update({"money":{"bank": firestore.Increment(-amount)}})
+def removeMoney(userID: int, amount: int | float, type: str = "bank"):
+    if type == "wallet":
+        db.collection("accounts").document(str(userID)).update({"money.wallet": firestore.Increment(-amount)})
+    else:
+        db.collection("accounts").document(str(userID)).update({"money.bank": firestore.Increment(-amount)})
 
 
 servers = [1055476996077015141]
 staffRole = 1076075894722023435
 earlyAccessRole = 1097927212784693298
 commandLogsChannel = 1325869256486686782
+xmarkEmoji = "<:xmark:1326705481854619680>"
+tickEmoji = "<:tick:1326705494198321294>"
 
 
-bot = discord.Bot()
+intents = discord.Intents.all()
+
+bot = discord.Bot(intents=intents)
 
 @bot.event
 async def on_ready():
@@ -146,50 +152,13 @@ async def on_message(message):
     if message.author.bot:
         return    
 
-commandTimeout = {}
-commandTimeoutCount = {}
+@bot.event
+async def on_application_command_error(ctx,error):
+    if isinstance(error,commands.CommandOnCooldown):
+        await ctx.respond(f"- **{error}** {xmarkEmoji}",ephemeral=True,delete_after=2)
+    else:
+        raise error    
 
-def CommandSpamProtection(timeout=5):
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(ctx, *args, **kwargs):
-            current_time = time.time()
-            user_id = ctx.author.id
-
-            if user_id not in commandTimeoutCount:
-                commandTimeoutCount[user_id] = 0
-
-            if user_id in commandTimeout:
-                time_left = commandTimeout[user_id] - current_time
-                if time_left > 0:
-                    commandTimeoutCount[user_id] += 1
-                    embed = discord.Embed(
-                        title="<:csp:1326700853930754080> You are on cooldown!",
-                        description=f"### Time Left :\n- **{int(time_left)}s**",
-                        color=discord.Color.red()
-                    )
-                    embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1128242859078852648/1326701102237880330/csp_logo.png?ex=6780622f&is=677f10af&hm=c49f053ef0bb3ce7b8a14f7ce540dfd02d5650a534a6efa02c9c782c5b3a78ad&")
-                    embed.set_footer(
-                        text="Spam Protection By sukrit_thakur",
-                        icon_url="https://cdn.discordapp.com/avatars/774179600800284682/f90d1b3530e364ec8572ce92463c6c00.png?size=1024"
-                    )
-                    await ctx.respond(embed=embed, ephemeral=True)
-
-                    if commandTimeoutCount[user_id] > 2:
-                        commandTimeout[user_id] = current_time + timeout * 2
-                        await asyncio.sleep(timeout * 2)
-                        commandTimeout.pop(user_id, None)
-                    return
-
-            await func(ctx, *args, **kwargs)
-
-            commandTimeout[user_id] = current_time + timeout
-            commandTimeoutCount[user_id] = 0
-            await asyncio.sleep(timeout)
-            commandTimeout.pop(user_id, None)
-
-        return wrapper
-    return decorator
 
 def hasAccount():
     def decorator(func):
@@ -199,7 +168,7 @@ def hasAccount():
             if hasAcc != None:
                 return await func(ctx, *args, **kwargs)
             else:
-                await ctx.respond("- **You do not have an account to use this command <:xmark:1326705481854619680>, use the command `/register` to create one.**", ephemeral=True)
+                await ctx.respond(f"- **You do not have an account to use this command {xmarkEmoji}, use the command `/register` to create one.**", ephemeral=True)
                 return
         return wrapper
     return decorator
@@ -216,7 +185,7 @@ def isBetaUser():
             if role:
                 return await func(ctx, *args, **kwargs)
             else:
-                await ctx.respond("- **You do not have __Early Access Role__ to use this command <:xmark:1326705481854619680>**", ephemeral=True)
+                await ctx.respond(f"- **You do not have __Early Access Role__ to use this command {xmarkEmoji}**", ephemeral=True)
                 return
         return wrapper
     return decorator
@@ -232,22 +201,23 @@ def isStaff():
             if role:
                 return await func(ctx, *args, **kwargs)
             else:
-                await ctx.respond("- **You do not have the required permissions to use this command <:xmark:1326705481854619680>**", ephemeral=True)
+                await ctx.respond(f"- **You do not have the required permissions to use this command {xmarkEmoji}**", ephemeral=True)
                 return
         return wrapper
     return decorator
 
-
+commandRateLimit = 1
+commandCoolDown = 5
 
 
 @bot.slash_command(guild_ids=servers,name='latency',description='To get the bots response time.')
-@CommandSpamProtection()
+@commands.cooldown(commandRateLimit,commandCoolDown,commands.BucketType.user)
 @isBetaUser()
 async def latency(ctx):
     await ctx.respond(f"**Latency :** `{int(bot.latency*1000)}ms`")
 
 @bot.slash_command(guild_ids=servers,name='agent',description='Get a random agent.')
-@CommandSpamProtection(10)
+@commands.cooldown(commandRateLimit,commandCoolDown * 2,commands.BucketType.user)
 @isBetaUser()
 async def agent(ctx):
    embed = discord.Embed(title="Your Agent Is -", description=f"## LOADING...\n- ...", color=discord.Color.yellow())
@@ -262,7 +232,7 @@ async def agent(ctx):
 
 
 @bot.slash_command(guild_ids=servers, name='test_agents', description='test random agent command.')
-@CommandSpamProtection()
+@commands.cooldown(commandRateLimit,commandCoolDown,commands.BucketType.user)
 @isStaff()
 @isBetaUser()
 async def test_agents(ctx):
@@ -286,20 +256,20 @@ async def test_agents(ctx):
     await ctx.send("All agents sent.")
 
 @bot.slash_command(guild_ids=servers, name='clear', description='Clears chat messages.')
-@CommandSpamProtection()
+@commands.cooldown(commandRateLimit,commandCoolDown,commands.BucketType.user)
 @isStaff()
 @isBetaUser()
 async def clear(ctx,amount=1):
     await ctx.defer(ephemeral=True)
     if int(amount) > 100:
-        await ctx.respond("- **You can't clear more than 100 messages <:xmark:1326705481854619680>**",ephemeral=True)
+        await ctx.respond(f"- **You can't clear more than 100 messages {xmarkEmoji}**",ephemeral=True)
         return
     await ctx.channel.purge(limit=int(amount))
-    await ctx.respond(f"- **Cleared `{amount}` message(s) <:tick:1326705494198321294>**",ephemeral=True)
+    await ctx.respond(f"- **Cleared `{amount}` message(s) {tickEmoji}**",ephemeral=True)
     
 
 @bot.slash_command(guild_ids=servers, name='register', description='Create an account.')
-@CommandSpamProtection(15)
+@commands.cooldown(commandRateLimit,commandCoolDown * 3,commands.BucketType.user)
 @isBetaUser()
 async def register(ctx):
     data = {
@@ -317,19 +287,177 @@ async def register(ctx):
     }
     await ctx.defer(ephemeral=True)
     if (rdb("accounts",str(ctx.author.id)) != None):
-     return await ctx.respond(f"- **You already have an account <:xmark:1326705481854619680>**",ephemeral=True)
+     return await ctx.respond(f"- **You already have an account {xmarkEmoji}**",ephemeral=True)
     cdb("accounts",data,str(ctx.author.id))
-    await ctx.respond(f"- **Account created successfully <:tick:1326705494198321294>**",ephemeral=True)
+    await ctx.respond(f"- **Account created successfully {tickEmoji}**",ephemeral=True)
 
 
 @bot.slash_command(guild_ids=servers, name='balance', description='Check your balance.')
-@CommandSpamProtection(10)
+@commands.cooldown(commandRateLimit,commandCoolDown * 2,commands.BucketType.user)
 @isBetaUser()
 @hasAccount()
 async def balance(ctx,hidden: str = "true"):
     await ctx.defer(ephemeral=hidden.lower() not in ["false", "no"])
     data = rdb("accounts",str(ctx.author.id))
-    embed = discord.Embed(title=f"Your Balance {ctx.author.display_name}", description=f"## <:_bank:1326706646977875988>Bank : `{'{:,}'.format(data['money']['bank'])}`\n### <:_wallet:1326706644591312906> Wallet : `{'{:,}'.format(data['money']['wallet'])}`", color=discord.Color.green())
+    embed = discord.Embed(title=f"Your Balance {ctx.author.display_name}", description=f"## <:_bank:1326706646977875988>Bank : `${'{:,}'.format(data['money']['bank'])}`\n### <:_wallet:1326706644591312906> Wallet : `${'{:,}'.format(data['money']['wallet'])}`", color=discord.Color.green())
     await ctx.respond(embed=embed,ephemeral=hidden=="True")
+
+# NEXT UP ROB COMMAND....
+
+robbed = [
+    {
+     "robber": 31873123821,
+     "robbed": 29381237812,
+     "amount": 500
+    } 
+]
+
+@bot.slash_command(guild_ids=servers, name='rob', description='Rob Someone.')
+@commands.cooldown(commandRateLimit,commandCoolDown * 4,commands.BucketType.user)
+@isBetaUser()
+@hasAccount()
+async def rob(ctx : discord.ApplicationContext,user: Annotated[discord.Member, Option(discord.Member,"Select whose wallet you want to rob")]):
+    await ctx.defer(ephemeral=True)
+
+    if ctx.author.id == user.id:
+        return await ctx.respond(f"- **You cannot rob yourself {xmarkEmoji}**")
+
+    for rob in robbed:
+        if rob["robber"] == ctx.author.id:
+            return await ctx.respond(f"- **You just robbed someone wait sometime before you can rob again {xmarkEmoji}**")
+
+    if user.status.value in ['dnd','offline']:
+        return await ctx.respond(f"- **{user.display_name} is currently in `{user.status.value.upper()}` Mode, So you cannot rob them {xmarkEmoji}**")
+    if not rdb("accounts",str(user.id)):    
+       return await ctx.respond(f"- **{user.display_name} Does not have a wallet {xmarkEmoji}**")
+    cashOnPerson = rdb("accounts",str(user.id))["money"]["wallet"]
+
+    cashFound = 0
+    if (cashOnPerson <= 0):
+        return await ctx.respond(f"- **There was no money in {user.display_name}'s wallet {xmarkEmoji}**")
+    if (cashOnPerson < 500):
+        cashFound = random.randint(1,cashOnPerson)
+    else:
+        cashFound = random.randint(5,500)
+    try:
+        removeMoney(str(user.id),cashFound,"wallet")
+        addMoney(str(ctx.author.id),cashFound,"wallet")
+        robbedData = {
+            "robber": ctx.author.id,
+            "robbed": user.id,
+            "amount": cashFound
+        }
+        robbed.append(robbedData)
+        threading.Timer(120, lambda: robbed.remove(robbedData).start())
+        await ctx.respond(f"- **You successfully robbed `${'{:,}'.format(cashFound)}` {tickEmoji}**")
+        await ctx.channel.send(f"**{user.mention}, Your wallet was just robbed of `${'{:,}'.format(cashFound)}`, You have 2min to find who it was with the command `/findrobber [name]`**")
+
+    except Exception as e:
+        await ctx.respond(f"- **There was an error :** `{e}`")
+
+   
+@bot.slash_command(guild_ids=servers, name='findrobber', description='Find the person who robbed you.')
+@commands.cooldown(commandRateLimit,commandCoolDown,commands.BucketType.user)
+@isBetaUser()
+@hasAccount()
+async def findrobber(ctx : discord.ApplicationContext,user: Annotated[discord.Member, Option(discord.Member,"Select the person who you think robbed you.")]):
+    await ctx.defer()
+
+    if ctx.author.id == user.id:
+        return await ctx.respond(f"- {xmarkEmoji} **You cannot find yourself**")
+
+    robbedData: dict = {
+        "robbed": None
+    }
+    for data in robbed:
+        if data["robbed"] == ctx.author.id:
+            robbedData = data
+            break
+    if data["robbed"] == user.id:
+        return await ctx.respond(f"- {xmarkEmoji} **{user.display_name} was robbed he is not the robber**")
+    
+    if robbedData["robbed"] == None:
+        return await ctx.respond(f"- {xmarkEmoji} **There is no sus person here, Better Luck Next Time**")
+    if robbedData["robber"] != user.id:
+        return await ctx.respond(f"- {xmarkEmoji} **The person who robbed you is not {user.display_name}**")              
+    await ctx.respond(f"- {tickEmoji} **You found the person!,It was {user.mention}**")
+    try:
+     robbed.remove(robbedData) 
+     await ctx.followup.send(f"- **You got your `${'{:,}'.format(robbedData['amount'])}` Back!**")   
+     userMoney = rdb("accounts",str(user.id))["money"]
+     if userMoney["wallet"] - robbedData['amount'] <= 0:
+         costing = random.randint(1,20)
+         if userMoney["bank"] >= 20:
+            removeMoney(str(user.id),robbedData['amount'] + costing,"bank")
+            addMoney(str(ctx.author.id),robbedData['amount'] + costing,"wallet")
+            return await ctx.followup.send(f"- **You also beat {user.display_name} and took all of their belongings costing `${'{:,}'.format(costing)}`**")
+         else:
+            return await ctx.followup.send(f"- **You also beat {user.display_name} but they did not have any money on them**")
+     if userMoney["wallet"] - robbedData['amount'] > 5:
+         costing = random.randint(1,5)
+         removeMoney(str(user.id),robbedData['amount'] + costing,"wallet")
+         addMoney(str(ctx.author.id),robbedData['amount'] + costing,"wallet")
+         return await ctx.followup.send(f"- **You also beat {user.display_name} and took all of their belongings costing `${'{:,}'.format(costing)}`**")
+     if userMoney["wallet"] - robbedData['amount'] > 500:
+         costing = random.randint(50,500)
+         removeMoney(str(user.id),robbedData['amount'] + costing,"wallet")
+         addMoney(str(ctx.author.id),robbedData['amount'] + costing,"wallet")
+         return await ctx.followup.send(f"- **You also beat {user.display_name} and took all of their belongings costing `${'{:,}'.format(costing)}`**")
+    except Exception as e:
+        await ctx.followup.send(f"- **There was an error :** `{e}`")
+
+
+@bot.slash_command(guild_ids=servers, name='deposit', description='Deposit your wallet money to bank.')
+@commands.cooldown(commandRateLimit,commandCoolDown * 2,commands.BucketType.user)
+@isBetaUser()
+@hasAccount()
+async def deposit(ctx : discord.ApplicationContext,amount: str):
+    await ctx.defer(ephemeral=True)
+
+    try:
+        amount = int(amount)
+    except ValueError:
+        return await ctx.respond(f"- **Invalid input: Please enter a valid number {xmarkEmoji}**")
+
+    if int(amount) > rdb("accounts",str(ctx.author.id))["money"]["wallet"]:
+        return await ctx.respond(f"- **You cannot deposit more than your wallet balance {xmarkEmoji}**")
+
+    removeMoney(str(ctx.author.id),int(amount),"wallet")
+    addMoney(str(ctx.author.id),int(amount),"bank")
+    await ctx.respond(f"- **You successfully deposited `${'{:,}'.format(int(amount))}` {tickEmoji}**")
+
+@bot.slash_command(guild_ids=servers, name='withdraw', description='Withdraw your bank money to wallet.')
+@commands.cooldown(commandRateLimit,commandCoolDown * 2,commands.BucketType.user)
+@isBetaUser()
+@hasAccount()
+async def deposit(ctx : discord.ApplicationContext,amount: str):
+    await ctx.defer(ephemeral=True)
+
+    try:
+        amount = int(amount)
+    except ValueError:
+        return await ctx.respond(f"- **Invalid input: Please enter a valid number {xmarkEmoji}**")
+
+    if int(amount) > rdb("accounts",str(ctx.author.id))["money"]["bank"]:
+        return await ctx.respond(f"- **You cannot withdraw more than your bank balance {xmarkEmoji}**")
+
+    removeMoney(str(ctx.author.id),int(amount),"bank")
+    addMoney(str(ctx.author.id),int(amount),"wallet")
+    await ctx.respond(f"- **You successfully withdrew `${'{:,}'.format(int(amount))}` {tickEmoji}**")
+
+@bot.slash_command(guild_ids=servers, name='depall', description='Deposit all your money to bank.')
+@commands.cooldown(commandRateLimit,commandCoolDown * 5,commands.BucketType.user)
+@isBetaUser()
+@hasAccount()
+async def depall(ctx : discord.ApplicationContext):
+    await ctx.defer(ephemeral=True)
+    walletamount = rdb("accounts",str(ctx.author.id))["money"]["wallet"]
+
+    if walletamount <= 0:
+        return await ctx.respond(f"- **You do not have any money to deposit {xmarkEmoji}**")
+
+    removeMoney(str(ctx.author.id),walletamount,"wallet")
+    addMoney(str(ctx.author.id),walletamount,"bank")
+    await ctx.respond(f"- **You successfully deposited all your money {tickEmoji}**")
 
 bot.run(decrypt_string(rdb('about-bot','settings')["TOKEN"],decryption_map))    
