@@ -1,6 +1,7 @@
 import discord
 import time
 from discord import ui, Button, Embed, Option
+from discord.ui import View
 from discord.ext import commands
 from typing import Annotated
 from datetime import date
@@ -88,7 +89,37 @@ try:
       else:
           db.collection("accounts").document(str(userID)).update({"money.bank": firestore.Increment(-amount)})
   
-  
+  def updateInventory(userID: int, itemID: str, amount: int):
+    if itemID not in GetItems():
+        return {"status": "error", "message": f"Item {itemID} does not exist."}
+    
+
+    doc_ref = db.collection("accounts").document(str(userID))
+    doc = doc_ref.get()
+    
+    if not doc.exists:
+        return {"status": "error", "message": f"doc {str(userID)} does not exist."}
+    
+    inventory = doc.to_dict().get("inventory", [])
+    item_found = False
+
+
+    updated_inventory = []
+    for item in inventory:
+        if item["id"] == itemID:
+            item_found = True
+            new_amount = item["amount"] + amount
+            if new_amount > 0:
+                updated_inventory.append({"id": itemID, "amount": new_amount})
+        else:
+            updated_inventory.append(item)
+
+    if not item_found and amount > 0:
+        updated_inventory.append({"id": itemID, "amount": amount})
+
+    doc_ref.update({"inventory": updated_inventory})
+    return {"status": "success", "message": f"inventory of user {userID} Modified, Item: {itemID}, Amount: {amount}."}
+
   servers = [1055476996077015141]
   staffRole = 1076075894722023435
   earlyAccessRole = 1097927212784693298
@@ -114,7 +145,7 @@ try:
       command_name = ctx.command.name
       command_id = ctx.command.id
       options = ctx.interaction.data.get('options', [])
-      args = [option['value'] for option in options]
+      args = [str(option['value']) for option in options]
       embed = discord.Embed(title="Command Executed By An User",description=f"```fix\nName: {user.name}\nID: {user.id}\nCommandName: {command_name}\nCommandID: {command_id}\nArguments: {str(','.join(args))}\nTime: {time.strftime('%d-%m-%Y %H:%M:%S', time.localtime())}\n```", color=discord.Color.blue())
       channel = bot.get_channel(commandLogsChannel)
       await channel.send(embed=embed)
@@ -172,7 +203,7 @@ try:
   @bot.event
   async def on_application_command_error(ctx,error):
       if isinstance(error,commands.CommandOnCooldown):
-          await ctx.respond(f"- **{error}** {xmarkEmoji}",ephemeral=True,delete_after=2)
+          await ctx.respond(f"- **{xmarkEmoji} {error}**",ephemeral=True,delete_after=2)
       else:
           raise error    
   
@@ -185,7 +216,7 @@ try:
               if hasAcc != None:
                   return await func(ctx, *args, **kwargs)
               else:
-                  await ctx.respond(f"- **You do not have an account to use this command {xmarkEmoji}, use the command `/register` to create one.**", ephemeral=True)
+                  await ctx.respond(f"- **{xmarkEmoji} You do not have an account to use this command, use the command `/register` to create one.**", ephemeral=True)
                   return
           return wrapper
       return decorator
@@ -202,7 +233,7 @@ try:
               if role:
                   return await func(ctx, *args, **kwargs)
               else:
-                  await ctx.respond(f"- **You do not have __Early Access Role__ to use this command {xmarkEmoji}**", ephemeral=True)
+                  await ctx.respond(f"- **{xmarkEmoji} You do not have __Early Access Role__ to use this command.**", ephemeral=True)
                   return
           return wrapper
       return decorator
@@ -218,7 +249,7 @@ try:
               if role:
                   return await func(ctx, *args, **kwargs)
               else:
-                  await ctx.respond(f"- **You do not have the required permissions to use this command {xmarkEmoji}**", ephemeral=True)
+                  await ctx.respond(f"- **{xmarkEmoji} You do not have the required permissions to use this command.**", ephemeral=True)
                   return
           return wrapper
       return decorator
@@ -279,10 +310,10 @@ try:
   async def clear(ctx,amount=1):
       await ctx.defer(ephemeral=True)
       if int(amount) > 100:
-          await ctx.respond(f"- **You can't clear more than 100 messages {xmarkEmoji}**",ephemeral=True)
+          await ctx.respond(f"- **{xmarkEmoji} You can't clear more than 100 messages.**",ephemeral=True)
           return
       await ctx.channel.purge(limit=int(amount))
-      await ctx.respond(f"- **Cleared `{amount}` message(s) {tickEmoji}**",ephemeral=True)
+      await ctx.respond(f"- **{tickEmoji} Cleared `{amount}` message(s)**",ephemeral=True)
       
   
   @bot.slash_command(guild_ids=servers, name='register', description='Create an account.')
@@ -296,17 +327,15 @@ try:
          "inventory": [
             {
                "id": "phone",
-               "name": "Phone",
-               "emoji": "<:phone:1326689224749219982>",
                "amount": 1
             }
          ]
       }
       await ctx.defer(ephemeral=True)
       if (rdb("accounts",str(ctx.author.id)) != None):
-       return await ctx.respond(f"- **You already have an account {xmarkEmoji}**",ephemeral=True)
+       return await ctx.respond(f"- **{xmarkEmoji} You already have an account!**",ephemeral=True)
       cdb("accounts",data,str(ctx.author.id))
-      await ctx.respond(f"- **Account created successfully {tickEmoji}**",ephemeral=True)
+      await ctx.respond(f"- **{tickEmoji} Account created successfully!**",ephemeral=True)
   
   
   @bot.slash_command(guild_ids=servers, name='balance', description='Check your balance.')
@@ -316,7 +345,7 @@ try:
   async def balance(ctx,hidden: str = "true"):
       await ctx.defer(ephemeral=hidden.lower() not in ["false", "no"])
       data = rdb("accounts",str(ctx.author.id))
-      embed = discord.Embed(title=f"Your Balance {ctx.author.display_name}", description=f"## <:_bank:1326706646977875988>Bank : `${'{:,}'.format(data['money']['bank'])}`\n### <:_wallet:1326706644591312906> Wallet : `${'{:,}'.format(data['money']['wallet'])}`", color=discord.Color.green())
+      embed = discord.Embed(title=f"Your Balance {ctx.author.display_name}", description=f"## <:_bank:1327722064307818496> : `${'{:,}'.format(data['money']['bank'])}`\n## <:_cash:1327722066660688012> : `${'{:,}'.format(data['money']['wallet'])}`\n- **Total :** `${'{:,}'.format(data['money']['wallet'] + data['money']['bank'])}`", color=discord.Color.green())
       await ctx.respond(embed=embed,ephemeral=hidden=="True")
   
   
@@ -331,21 +360,25 @@ try:
       await ctx.defer(ephemeral=True)
   
       if ctx.author.id == user.id:
-          return await ctx.respond(f"- **You cannot rob yourself {xmarkEmoji}**")
-  
+          return await ctx.respond(f"- **{xmarkEmoji} You cannot rob yourself.**")
+
+      for rob in robbed:
+          if rob["robbed"] == user.id:
+              return await ctx.respond(f"- **{xmarkEmoji} {user.display_name} just got robbed so they don't have anything valuable.**")
+
       for rob in robbed:
           if rob["robber"] == ctx.author.id:
-              return await ctx.respond(f"- **You just robbed someone wait sometime before you can rob again {xmarkEmoji}**")
+              return await ctx.respond(f"- **{xmarkEmoji} You just robbed someone wait sometime before you can rob again.**")
   
       if user.status.value in ['dnd','offline']:
-          return await ctx.respond(f"- **{user.display_name} is currently in `{user.status.value.upper()}` Mode, So you cannot rob them {xmarkEmoji}**")
+          return await ctx.respond(f"- **{xmarkEmoji} {user.display_name} is currently in `{user.status.value.upper()}` Mode, So you cannot rob them.**")
       if not rdb("accounts",str(user.id)):    
-         return await ctx.respond(f"- **{user.display_name} Does not have a wallet {xmarkEmoji}**")
+         return await ctx.respond(f"- **{xmarkEmoji} {user.display_name} Does not have a wallet.**")
       cashOnPerson = rdb("accounts",str(user.id))["money"]["wallet"]
   
       cashFound = 0
       if (cashOnPerson <= 0):
-          return await ctx.respond(f"- **There was no money in {user.display_name}'s wallet {xmarkEmoji}**")
+          return await ctx.respond(f"- **{xmarkEmoji} There was no money in {user.display_name}'s wallet.**")
       if (cashOnPerson < 500):
           cashFound = random.randint(1,cashOnPerson)
       else:
@@ -360,8 +393,8 @@ try:
           }
           robbed.append(robbedData)
           threading.Timer(120, lambda: robbed.remove(robbedData).start())
-          await ctx.respond(f"- **You successfully robbed `${'{:,}'.format(cashFound)}` {tickEmoji}**")
-          await ctx.channel.send(f"**{user.mention}, Your wallet was just robbed of `${'{:,}'.format(cashFound)}`, You have 2min to find who it was with the command `/findrobber [name]`**")
+          await ctx.respond(f"- **{tickEmoji} You successfully robbed `${'{:,}'.format(cashFound)}`**")
+          await ctx.channel.send(f"**{user.mention}, Your wallet was just robbed of `${'{:,}'.format(cashFound)}`!, You have 2min to find who it was with the command `/findrobber [name]`**")
   
       except Exception as e:
           await ctx.respond(f"- **There was an error :** `{e}`")
@@ -422,39 +455,29 @@ try:
   @commands.cooldown(commandRateLimit,commandCoolDown * 2,commands.BucketType.user)
   @isBetaUser()
   @hasAccount()
-  async def deposit(ctx : discord.ApplicationContext,amount: str):
+  async def deposit(ctx : discord.ApplicationContext,amount: int):
       await ctx.defer(ephemeral=True)
+      if amount > rdb("accounts",str(ctx.author.id))["money"]["wallet"]:
+          return await ctx.respond(f"- **{xmarkEmoji} You cannot deposit more than your wallet balance.**")
   
-      try:
-          amount = int(amount)
-      except ValueError:
-          return await ctx.respond(f"- **Invalid input: Please enter a valid number {xmarkEmoji}**")
-  
-      if int(amount) > rdb("accounts",str(ctx.author.id))["money"]["wallet"]:
-          return await ctx.respond(f"- **You cannot deposit more than your wallet balance {xmarkEmoji}**")
-  
-      removeMoney(str(ctx.author.id),int(amount),"wallet")
-      addMoney(str(ctx.author.id),int(amount),"bank")
-      await ctx.respond(f"- **You successfully deposited `${'{:,}'.format(int(amount))}` {tickEmoji}**")
+      removeMoney(str(ctx.author.id),amount,"wallet")
+      addMoney(str(ctx.author.id),amount,"bank")
+      await ctx.respond(f"- **{tickEmoji} You successfully deposited `${'{:,}'.format(amount)}`**")
   
   @bot.slash_command(guild_ids=servers, name='withdraw', description='Withdraw your bank money to wallet.')
   @commands.cooldown(commandRateLimit,commandCoolDown * 2,commands.BucketType.user)
   @isBetaUser()
   @hasAccount()
-  async def withdraw(ctx : discord.ApplicationContext,amount: str):
+  async def withdraw(ctx : discord.ApplicationContext,amount: int):
       await ctx.defer(ephemeral=True)
+
   
-      try:
-          amount = int(amount)
-      except ValueError:
-          return await ctx.respond(f"- **Invalid input: Please enter a valid number {xmarkEmoji}**")
+      if amount > rdb("accounts",str(ctx.author.id))["money"]["bank"]:
+          return await ctx.respond(f"- **{xmarkEmoji} You cannot withdraw more than your bank balance.**")
   
-      if int(amount) > rdb("accounts",str(ctx.author.id))["money"]["bank"]:
-          return await ctx.respond(f"- **You cannot withdraw more than your bank balance {xmarkEmoji}**")
-  
-      removeMoney(str(ctx.author.id),int(amount),"bank")
-      addMoney(str(ctx.author.id),int(amount),"wallet")
-      await ctx.respond(f"- **You successfully withdrew `${'{:,}'.format(int(amount))}` {tickEmoji}**")
+      removeMoney(str(ctx.author.id),amount,"bank")
+      addMoney(str(ctx.author.id),amount,"wallet")
+      await ctx.respond(f"- **{tickEmoji} You successfully withdrew `${'{:,}'.format(amount)}`**")
   
   @bot.slash_command(guild_ids=servers, name='depall', description='Deposit all your money to bank.')
   @commands.cooldown(commandRateLimit,commandCoolDown * 5,commands.BucketType.user)
@@ -465,24 +488,138 @@ try:
       walletamount = rdb("accounts",str(ctx.author.id))["money"]["wallet"]
   
       if walletamount <= 0:
-          return await ctx.respond(f"- **You do not have any money to deposit {xmarkEmoji}**")
+          return await ctx.respond(f"- **{xmarkEmoji} You do not have any money to deposit.**")
   
       removeMoney(str(ctx.author.id),walletamount,"wallet")
       addMoney(str(ctx.author.id),walletamount,"bank")
-      await ctx.respond(f"- **You successfully deposited all your money {tickEmoji}**")
+      await ctx.respond(f"- **{tickEmoji} You successfully deposited all your money to your bank.**")
+
+
+
+
+  @bot.slash_command(guild_ids=servers, name='inventory', description='Open your inventory.')
+  @commands.cooldown(commandRateLimit, commandCoolDown * 3, commands.BucketType.user)
+  @isBetaUser()
+  @hasAccount()
+  async def inventory(ctx: discord.ApplicationContext, hidden: str = "true", page: int = 1):
+      await ctx.defer(ephemeral=hidden.lower() not in ["false", "no"])
+      data = rdb("accounts", str(ctx.author.id))
+      
+      items_per_page = 12
+      inventory = data["inventory"]
+      total_pages = max((len(inventory) + items_per_page - 1) // items_per_page, 1)
   
+      page = max(1, min(page, total_pages)) - 1 
+  
+      def create_embed(current_page: int) -> discord.Embed:
+          start = current_page * items_per_page
+          end = start + items_per_page
+          page_items = inventory[start:end]
+  
+          embed = discord.Embed(
+              title=f"{ctx.author.display_name}'s Inventory - Page {current_page + 1}/{total_pages}",
+              color=discord.Color.green()
+          )
+          if len(page_items) == 0:
+              embed.description = "## - Empty"  
+
+          for item in page_items:
+              itemData = GetItem(item["id"])
+              embed.add_field(
+                  name=f"{itemData["emoji"]} {itemData["name"]}",
+                  value=f"`x{item['amount']}`",
+                  inline=True
+              )
+          return embed
+  
+      current_page = page
+      embed = create_embed(current_page)
+  
+      class PaginationView(View):
+          def __init__(self):
+              super().__init__(timeout=60)
+              self.update_buttons()
+  
+          @discord.ui.button(label="", emoji="<:leftarrow:1327716449510494339>", style=discord.ButtonStyle.secondary)
+          async def previous_button(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              nonlocal current_page
+              current_page = max(0, current_page - 1)
+              embed = create_embed(current_page)
+              self.update_buttons()
+              await interaction.response.edit_message(embed=embed, view=self)
+  
+          @discord.ui.button(label="", emoji="<:rightarrow:1327716447467733043>", style=discord.ButtonStyle.secondary)
+          async def next_button(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              nonlocal current_page
+              current_page = min(total_pages - 1, current_page + 1)
+              embed = create_embed(current_page)
+              self.update_buttons()
+              await interaction.response.edit_message(embed=embed, view=self)
+  
+          def update_buttons(self):
+              self.previous_button.disabled = current_page <= 0
+              self.next_button.disabled = current_page >= total_pages - 1
+  
+      view = PaginationView()
+  
+      await ctx.respond(embed=embed, view=view)
+
+
+  async def autocomplete_example(ctx: discord.AutocompleteContext):
+    options = list(GetItems().keys())
+    return [option for option in options if ctx.value.lower() in option.lower()]  
+
+  @bot.slash_command(guild_ids=servers, name='modify_inventory', description='Add or Remove items from a inventory.')
+  @commands.cooldown(commandRateLimit, commandCoolDown * 5, commands.BucketType.user)
+  @isBetaUser()
+  @isStaff()
+  async def modify_inventory(ctx: discord.ApplicationContext,user: discord.User,item_id:Annotated[str,Option(str, "Choose an item", autocomplete=autocomplete_example)],modification:int):
+      await ctx.defer(ephemeral=True)
+      request = updateInventory(user.id,item_id,modification)
+      if request["status"] == "error":
+          return await ctx.respond(f"- {xmarkEmoji} **{request['message']}**")
+      if request["status"] == "success":
+          return await ctx.respond(f"- {tickEmoji} **{request['message']}**")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   
   settings = rdb('about-bot','settings')
   
   if settings == None:
       raise ConnectionError(Fore.RED + "Can't fetch settings")
   elif settings["version"] != version:
-      raise ConnectionRefusedError(Fore.RED + f"Version Mismatch:" + Fore.YELLOW + f"\nCurrent: {version}" + Fore.GREEN + f"\nRequired: {settings['version']}")
+      raise ConnectionRefusedError(Fore.RED + f"Version Mismatch:" + Fore.YELLOW + f"\nCurrent: {version}" + Fore.GREEN + f"\nRequired: {settings['version']}" + Fore.CYAN + f"\nDownload The Latest Version({settings['version']}) From: linknotfound.com")
   elif settings["maintenance"] == True:
       raise PermissionError(Fore.LIGHTYELLOW_EX + "Bot is currently under maintenance")
   else:
       bot.run(decrypt_string(settings["TOKEN"],decryption_map))  
   pass
+except discord.errors.ClientException as e:
+    print(Fore.RED + f"Bot is already running or invalid state: {e}")
 except Exception as e:
     print(Fore.RED + f"An error occurred: {e}")
-    input(Fore.RED + "Press Enter to exit...")  
+    input(Fore.RED + "Press Enter to exit...")

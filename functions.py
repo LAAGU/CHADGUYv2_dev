@@ -136,6 +136,23 @@ agentArray : list[dict] = [
         }
     ]
 
+items: dict = {
+        "phone": {
+            "name": "Phone",
+            "emoji": "<:phone:1326689224749219982>",
+            "price": 1000
+        }
+}
+
+def GetItem(id : str) -> dict:
+    if id in items:
+        return items[id]
+    else:
+        return {"name": "Unknown", "emoji": "<:unknownItem:1327725424226074624>", "price": 0}
+
+def GetItems() -> dict:
+    return items
+
 def GetAgent(index : int) -> dict:
     return agentArray[index]
 
