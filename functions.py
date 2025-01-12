@@ -144,6 +144,16 @@ items: dict = {
         }
 }
 
+dailyRewards: dict = [
+    {
+        "amount": [50,200,500,1000,1200,1500,2000,2500,3000,4000,5000,6000,7000,8000,9000,10000],
+        "name": "money"
+    }
+]
+
+def GetRewards() -> list[dict]:
+    return dailyRewards
+
 def GetItem(id : str) -> dict:
     if id in items:
         return items[id]
@@ -156,7 +166,7 @@ def GetItems() -> dict:
 def GetAgent(index : int) -> dict:
     return agentArray[index]
 
-def GetAgentList()-> list[dict]:
+def GetAgentList() -> list[dict]:
     return agentArray
 
 

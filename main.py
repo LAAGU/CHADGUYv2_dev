@@ -4,7 +4,9 @@ from discord import ui, Button, Embed, Option
 from discord.ui import View
 from discord.ext import commands
 from typing import Annotated
+import datetime
 from datetime import date
+from dateutil import parser
 import json
 import threading
 import firebase_admin
@@ -13,7 +15,7 @@ from functions import *
 import random
 from functools import wraps
 import asyncio
-import os,sys
+import os,sys,re
 import colorama
 from colorama import Fore
 colorama.init(autoreset=True)
@@ -27,9 +29,22 @@ try:
         base_path = os.path.abspath(".")
 
     return os.path.join(base_path, relative_path)
+  
+
+  def get_product_version(file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        content = file.read()
+    
+    match = re.search(r"prodvers=\(\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\s*\)", content)
+    if match:
+        product_version = ".".join(match.groups())
+        return product_version
+    else:
+        raise ValueError("Product version not found in the file.")
 
   encryption_map, decryption_map = create_mapping()
   
+  version = get_product_version(resource_path('version_info.txt'))
   cred = credentials.Certificate(resource_path("cbv2pk.json"))
   firebase_admin.initialize_app(cred)
   
@@ -126,31 +141,81 @@ try:
   commandLogsChannel = 1325869256486686782
   xmarkEmoji = "<:xmark:1326705481854619680>"
   tickEmoji = "<:tick:1326705494198321294>"
+  StaffCommands = ['test_agents','modify_inventory','set_topic','clear']
   
   
   intents = discord.Intents.all()
   
   bot = discord.Bot(intents=intents)
-  version = "2.0.0"
+  
 
   @bot.event
   async def on_ready():
-      text = f"{bot.user.name} Started\nID: {bot.user.id}\nVersion: {version}"
+      text = f"{bot.user.name} Started\nID: {bot.user.id}\nVersion: {str(version).removesuffix('.0')}"
       print(Fore.LIGHTGREEN_EX + text)
       print(Fore.CYAN + "Also Join Our Discord At: https://discord.gg/ZxaDHm6jc4")
   
+
+  commandSpamWarnings = {}  
+  commandTimeouts = {}
+
   @bot.event
   async def on_application_command(ctx: discord.ApplicationContext):
+      botSpamLogChannel = bot.get_channel(1327836541589917836)
+
+      if ctx.command.name == "collect" and ctx.channel_id != 1327823326814670888:
+          if str(ctx.author.id) in commandSpamWarnings and commandSpamWarnings[str(ctx.author.id)] > 2:
+              
+              if str(ctx.author.id) in commandTimeouts:
+                  commandTimeouts[str(ctx.author.id)] = commandTimeouts[str(ctx.author.id)] + 1
+              else: 
+                  commandTimeouts[str(ctx.author.id)] = 1
+
+              await botSpamLogChannel.send(f"- **<@&1327818881066336358> User TimedOut For `Command Spam In Prohibited Channels`**\n- ## MoreDetails\n```json\nUserID:{str(ctx.author.id)}\nUserName:'{ctx.author.name}'\nJson: {str(commandSpamWarnings)}\n```")
+              commandSpamWarnings[str(ctx.author.id)] = 0    
+              await ctx.author.timeout_for(datetime.timedelta(minutes=1 * commandTimeouts[str(ctx.author.id)]), reason="Command Spam In Prohibited Channels")
+              return await ctx.respond(f"- {ctx.author.mention} **Timeout({str(1 * commandTimeouts[str(ctx.author.id)])}min), Reason: `Command Spam In Prohibited Channels`.**",ephemeral=True)  
+          elif str(ctx.author.id) in commandSpamWarnings:
+              commandSpamWarnings[str(ctx.author.id)] = commandSpamWarnings[str(ctx.author.id)] + 1
+              return await ctx.respond(f"- {xmarkEmoji} **(x{commandSpamWarnings[str(ctx.author.id)]})Warning!, Only use this command at** <#1327823326814670888>",ephemeral=True)
+          elif str(ctx.author.id) not in commandSpamWarnings:
+              commandSpamWarnings[str(ctx.author.id)] = 1
+              return await ctx.respond(f"- {xmarkEmoji} **(x{commandSpamWarnings[str(ctx.author.id)]})Warning!, Only use this command at** <#1327823326814670888>",ephemeral=True)  
+
+      elif ctx.command.name not in StaffCommands and ctx.command.name != "collect" and ctx.channel_id != 1064103178020335696 and ctx.channel_id != 1325869026928496741:
+          if str(ctx.author.id) in commandSpamWarnings and commandSpamWarnings[str(ctx.author.id)] > 2:
+              
+              if str(ctx.author.id) in commandTimeouts:
+                  commandTimeouts[str(ctx.author.id)] = commandTimeouts[str(ctx.author.id)] + 1
+              else:
+                  commandTimeouts[str(ctx.author.id)] = 1
+
+              await botSpamLogChannel.send(f"- **<@&1327818881066336358> User TimedOut For `Command Spam In Prohibited Channels`**\n- ## MoreDetails\n```json\nUserID:{str(ctx.author.id)}\nUserName:'{ctx.author.name}'\nJson: {str(commandSpamWarnings)}\n```")    
+              commandSpamWarnings[str(ctx.author.id)] = 0
+              await ctx.author.timeout_for(datetime.timedelta(minutes=1 * commandTimeouts[str(ctx.author.id)]), reason="Command Spam In Prohibited Channels")
+              return await ctx.respond(f"- {ctx.author.mention} **Timeout({str(1 * commandTimeouts[str(ctx.author.id)])}min), Reason: `Command Spam In Prohibited Channels`.**",ephemeral=True)  
+          elif str(ctx.author.id) in commandSpamWarnings:
+              commandSpamWarnings[str(ctx.author.id)] = commandSpamWarnings[str(ctx.author.id)] + 1
+              return await ctx.respond(f"- {xmarkEmoji} **(x{commandSpamWarnings[str(ctx.author.id)]})Warning!, Only use this command at** <#1064103178020335696>",ephemeral=True)  
+          elif str(ctx.author.id) not in commandSpamWarnings:
+              commandSpamWarnings[str(ctx.author.id)] = 1
+              return await ctx.respond(f"- {xmarkEmoji} **(x{commandSpamWarnings[str(ctx.author.id)]})Warning!, Only use this command at** <#1064103178020335696>",ephemeral=True)    
+          
+      
+
       user = ctx.author
       command_name = ctx.command.name
       command_id = ctx.command.id
       options = ctx.interaction.data.get('options', [])
       args = [str(option['value']) for option in options]
-      embed = discord.Embed(title="Command Executed By An User",description=f"```fix\nName: {user.name}\nID: {user.id}\nCommandName: {command_name}\nCommandID: {command_id}\nArguments: {str(','.join(args))}\nTime: {time.strftime('%d-%m-%Y %H:%M:%S', time.localtime())}\n```", color=discord.Color.blue())
       channel = bot.get_channel(commandLogsChannel)
+      if command_name in StaffCommands:
+        command_name = f"{command_name} [S-CMD]"
+        await channel.send("- <@&1327818881066336358> **Staff Command Was Used!**")
+      embed = discord.Embed(title="Command Executed By An User",description=f"```fix\nName: {user.name}\nID: {user.id}\nCommandName: {command_name}\nCommandID: {command_id}\nArguments: {str(','.join(args))}\nTime: {time.strftime('%d-%m-%Y %H:%M:%S', time.localtime())}\n```", color=discord.Color.blue())  
       await channel.send(embed=embed)
   
-  messageTimeout = {}
+  messageTimeout = {}   
   TimeoutCount = {}
   
   def MessageSpamProtection(timeout):
@@ -272,7 +337,7 @@ try:
      embed.set_image(url="https://cdn.dribbble.com/users/756637/screenshots/2249870/slot-machine-main-2.gif")
      msg = await ctx.respond(embed=embed)
      await asyncio.sleep(1.5)
-     agent = GetAgent(random.randint(0,27))
+     agent = GetAgent(random.randint(0,len(GetAgentList())-1))
      embed.set_image(url=random.choice(agent['img']))
      embed.description = f"## {agent['name']}\n- {agent['info']}"
      await msg.edit(embed=embed)
@@ -324,6 +389,7 @@ try:
          "name": ctx.author.name,
          "money": {"wallet":0,"bank":500},
          "createdOn": firestore.SERVER_TIMESTAMP,
+         "dailyReward": "2025-01-1 03:46:05.487000+00:00",
          "inventory": [
             {
                "id": "phone",
@@ -586,14 +652,61 @@ try:
           return await ctx.respond(f"- {tickEmoji} **{request['message']}**")
 
 
+  @bot.slash_command(guild_ids=servers, name='set_topic', description='Set current channel topic.')
+  @commands.cooldown(commandRateLimit, commandCoolDown, commands.BucketType.user)
+  @isBetaUser()
+  @isStaff()
+  async def set_topic(ctx: discord.ApplicationContext, topic: str):
+      await ctx.defer(ephemeral=True)
+      await ctx.channel.edit(topic=topic)
+      await ctx.respond(f"- {tickEmoji} **Topic has been set to:** \n```fix\n{topic}\n```")
 
 
 
+  @bot.slash_command(guild_ids=servers, name='collect', description='Collect your daily reward.')
+  @commands.cooldown(commandRateLimit, commandCoolDown * 25, commands.BucketType.user)
+  @isBetaUser()
+  @hasAccount()
+  async def collect(ctx: discord.ApplicationContext):
+    data = rdb('accounts', str(ctx.author.id))
+    
+    await ctx.defer(ephemeral=True)
+    
+    channel = bot.get_channel(1327823326814670888)
+    
+    if data["dailyReward"] is not None:
+        try:
+            daily_reward_date = parser.parse(str(data["dailyReward"])).date()
+            current_date = datetime.datetime.now(datetime.timezone.utc).date()
+            if daily_reward_date == current_date:
+                return await ctx.respond(f"- {xmarkEmoji} **You have already collected your daily reward.**")
+        except ValueError:
+            await ctx.respond(f"- {xmarkEmoji} **Invalid date format in `dailyReward`.**")
+            return
+        
+    Rewards = GetRewards()
+    embed = discord.Embed(title="Daily Reward", color=discord.Color.gold())
+    for reward in Rewards:
+        if reward["name"] == "money":
+            amount = random.randint(10,random.choice(reward["amount"]))
+            embed.add_field(name="# <:_cash:1327722066660688012> Cash", value=f"`${'{:,}'.format(amount)}`", inline=True)
+    
+    
+    if amount == 10_000:
+      embed.set_image(url="https://mir-s3-cdn-cf.behance.net/project_modules/disp/3e6f3c25140811.56342165f2d2b.gif")
+    elif amount > 9_000:
+      embed.set_image(url="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgIpoNexk7V40hyphenhyphencJRTOz91YM2XFWFUe51Xy62NF0905mLPsd8HZoP9l2_QyIny0c93OmnzjQS6k1D2Hz2uyDRcheIi4n571STNisvSUWCFU3orR6EBBp1Y4FIpXphkSi_epMuyqaKZMjpE/s1600/asdaasa.gif")    
+    elif amount > 5_000:
+      embed.set_image(url="https://media.tenor.com/5oTBpR_8aa4AAAAM/%D0%BD%D0%B5-%D0%BF%D0%BB%D0%BE%D1%85%D0%BE.gif")
+    else:
+      embed.set_image(url="https://media4.giphy.com/media/0laTZoLJHVHTwiag6Q/giphy.gif?cid=6c09b95211i308a8utjfrqytg7z712ltzsfdcaa2tzqzsix1&ep=v1_gifs_search&rid=giphy.gif&ct=g")  
+    
+    await channel.send(content=ctx.author.mention,embed=embed)
 
-
-
-
-
+    addMoney(ctx.author.id,amount,"wallet")
+    udb('accounts', str(ctx.author.id),{"dailyReward":firestore.SERVER_TIMESTAMP})
+    await ctx.respond(f"- {tickEmoji} **You have collected your daily reward.**")
+    
 
 
 
@@ -612,7 +725,7 @@ try:
   if settings == None:
       raise ConnectionError(Fore.RED + "Can't fetch settings")
   elif settings["version"] != version:
-      raise ConnectionRefusedError(Fore.RED + f"Version Mismatch:" + Fore.YELLOW + f"\nCurrent: {version}" + Fore.GREEN + f"\nRequired: {settings['version']}" + Fore.CYAN + f"\nDownload The Latest Version({settings['version']}) From: linknotfound.com")
+      raise ConnectionRefusedError(Fore.RED + f"Version Mismatch:" + Fore.YELLOW + f"\nCurrent: {str(version).removesuffix('.0')}" + Fore.GREEN + f"\nRequired: {str(settings['version']).removesuffix('.0')}" + Fore.CYAN + f"\nDownload The Latest Version({str(settings['version']).removesuffix('.0')}) From: https://discord.gg/ZxaDHm6jc4m")
   elif settings["maintenance"] == True:
       raise PermissionError(Fore.LIGHTYELLOW_EX + "Bot is currently under maintenance")
   else:
