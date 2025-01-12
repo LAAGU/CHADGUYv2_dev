@@ -417,6 +417,13 @@ try:
   
   
   robbed = []
+
+  async def handle_rob_removal(ctx, robbedData):
+    await asyncio.sleep(120)
+    user = await ctx.guild.fetch_member(robbedData['robbed'])
+    if robbedData in robbed:
+        robbed.remove(robbedData)
+        await ctx.channel.send(f"- **{xmarkEmoji} {user.mention} You failed to find the robber in time.**")
   
   @bot.slash_command(guild_ids=servers, name='rob', description='Rob Someone.')
   @commands.cooldown(commandRateLimit,commandCoolDown * 4,commands.BucketType.user)
@@ -427,6 +434,10 @@ try:
   
       if ctx.author.id == user.id:
           return await ctx.respond(f"- **{xmarkEmoji} You cannot rob yourself.**")
+
+      for rob in robbed:
+          if rob["robbed"] == ctx.author.id:
+              return await ctx.respond(f"- **{xmarkEmoji} You were just robbed so first find the robber.**")
 
       for rob in robbed:
           if rob["robbed"] == user.id:
@@ -458,7 +469,7 @@ try:
               "amount": cashFound
           }
           robbed.append(robbedData)
-          threading.Timer(120, lambda: robbed.remove(robbedData).start())
+          asyncio.create_task(handle_rob_removal(ctx, robbedData))
           await ctx.respond(f"- **{tickEmoji} You successfully robbed `${'{:,}'.format(cashFound)}`**")
           await ctx.channel.send(f"**{user.mention}, Your wallet was just robbed of `${'{:,}'.format(cashFound)}`!, You have 2min to find who it was with the command `/findrobber [name]`**")
   
@@ -483,8 +494,8 @@ try:
           if data["robbed"] == ctx.author.id:
               robbedData = data
               break
-      if data["robbed"] == user.id:
-          return await ctx.respond(f"- {xmarkEmoji} **{user.display_name} was robbed he is not the robber**")
+      if robbedData["robbed"] == user.id:
+        return await ctx.respond(f"- {xmarkEmoji} **{user.display_name} was robbed he is not the robber**")
       
       if robbedData["robbed"] == None:
           return await ctx.respond(f"- {xmarkEmoji} **There is no sus person here, Better Luck Next Time**")
