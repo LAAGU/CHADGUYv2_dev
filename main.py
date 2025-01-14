@@ -141,12 +141,90 @@ try:
   commandLogsChannel = 1325869256486686782
   xmarkEmoji = "<:xmark:1326705481854619680>"
   tickEmoji = "<:tick:1326705494198321294>"
-  StaffCommands = ['test_agents','modify_inventory','set_topic','clear']
+  StaffCommands = ['test_agents','modify_inventory','set_topic','clear','modify_money','check_inv']
   
   
   intents = discord.Intents.all()
   
   bot = discord.Bot(intents=intents)
+
+
+  async def CreatePages(ctx,list: list,fieldName:str,fieldValue:str,isInLine:bool,forHelpCMD:bool,forInv:bool,page: int = 1,title: str="CreatePages func",color = discord.Color.blurple(),itemPerPage: int = 12,Button_style = discord.ButtonStyle.secondary):
+    items_per_page = itemPerPage
+    total_pages = max((len(list) + items_per_page - 1) // items_per_page, 1)
+
+    page = max(1, min(page, total_pages)) - 1 
+
+    def create_embed(current_page: int) -> discord.Embed:
+        start = current_page * items_per_page
+        end = start + items_per_page
+        page_items = list[start:end]
+
+        embed = discord.Embed(
+            title=f"{title} - Page {current_page + 1}/{total_pages}",
+            color=color
+        )
+        if len(page_items) == 0:
+            embed.description = "## - Empty"  
+        if forInv:
+         for item in page_items:
+          itemData = GetItem(item["id"])
+          embed.add_field(
+            name=f"{itemData["emoji"]} {itemData["name"]}",
+            value=f"`x{item['amount']}`",
+            inline=True
+          )
+        elif forHelpCMD:
+         for item in page_items:
+          embed.add_field(
+            name=f"{"<:Staff_Command:1328509290654466188> " if item["staff"] else "<:User_Command:1328514019102818376> "} </{item[fieldName]}:{item['id']}>",
+            value=f"- `{item[fieldValue]}`",
+            inline=isInLine
+          )  
+        else:
+         for item in page_items:
+          embed.add_field(
+            name=f"{item[fieldName]}",
+            value=f"`x{item[fieldValue]}`",
+            inline=isInLine
+          )   
+        return embed
+
+    current_page = page
+    embed = create_embed(current_page)
+
+    class PaginationView(View):
+        def __init__(self):
+            super().__init__(timeout=60)
+            self.update_buttons()
+
+        @discord.ui.button(label="", emoji="<:leftarrow:1327716449510494339>", style=Button_style)
+        async def previous_button(self, button: Button, interaction: discord.Interaction):
+            if interaction.user.id != ctx.author.id:
+                return
+            nonlocal current_page
+            current_page = max(0, current_page - 1)
+            embed = create_embed(current_page)
+            self.update_buttons()
+            await interaction.response.edit_message(embed=embed, view=self)
+
+        @discord.ui.button(label="", emoji="<:rightarrow:1327716447467733043>", style=Button_style)
+        async def next_button(self, button: Button, interaction: discord.Interaction):
+            if interaction.user.id != ctx.author.id:
+                return
+            nonlocal current_page
+            current_page = min(total_pages - 1, current_page + 1)
+            embed = create_embed(current_page)
+            self.update_buttons()
+            await interaction.response.edit_message(embed=embed, view=self)
+
+        def update_buttons(self):
+            self.previous_button.disabled = current_page <= 0
+            self.next_button.disabled = current_page >= total_pages - 1
+
+    view = PaginationView()
+
+    await ctx.respond(embed=embed, view=view)
   
 
   @bot.event
@@ -287,6 +365,16 @@ try:
       return decorator
   
   
+  def excludeCMD(reason: str = "This command is non functional for sometime due to some issues."):
+      def decorator(func):
+          @wraps(func)
+          async def wrapper(ctx, *args, **kwargs):
+                  await ctx.respond(f"- **{xmarkEmoji} {reason}**", ephemeral=True)
+                  return
+          return wrapper
+      return decorator  
+
+
   def isBetaUser():
       def decorator(func):
           @wraps(func)
@@ -298,23 +386,39 @@ try:
               if role:
                   return await func(ctx, *args, **kwargs)
               else:
-                  await ctx.respond(f"- **{xmarkEmoji} You do not have __Early Access Role__ to use this command.**", ephemeral=True)
+                  await ctx.respond(f"- **{xmarkEmoji} The command you are trying to use is in early access,You will need the __Early Access Role__ to use this command.**", ephemeral=True)
                   return
           return wrapper
       return decorator
   
-  def isStaff():
+  def isStaff(rank = 0):
       def decorator(func):
           @wraps(func)
           async def wrapper(ctx, *args, **kwargs):
               if not isinstance(ctx.author, discord.Member):
                   ctx.author = await ctx.guild.fetch_member(ctx.author.id)
-  
-              role = discord.utils.get(ctx.author.roles, id=staffRole)
+              if rank == 0:
+                roleID = 1080797844933447792
+                role = discord.utils.get(ctx.author.roles, id=roleID)
+              if rank == 1:
+                roleID = 1080797701500837949
+                role = discord.utils.get(ctx.author.roles, id=roleID)
+              if rank == 2:
+                roleID = 1079051010846240848
+                role = discord.utils.get(ctx.author.roles, id=roleID)
+              if rank == 3:
+                roleID = 1079740752977993838
+                role = discord.utils.get(ctx.author.roles, id=roleID)
+              if rank == 4:
+                roleID = 1071331526161223680
+                role = discord.utils.get(ctx.author.roles, id=roleID)
+              if rank == "dev":
+                roleID = 1071086388709167124
+                role = discord.utils.get(ctx.author.roles, id=roleID)        
               if role:
                   return await func(ctx, *args, **kwargs)
               else:
-                  await ctx.respond(f"- **{xmarkEmoji} You do not have the required permissions to use this command.**", ephemeral=True)
+                  await ctx.respond(f"- **{xmarkEmoji} Role Required (<@&{roleID}>), You do not have the required permissions to use this command.**", ephemeral=True)
                   return
           return wrapper
       return decorator
@@ -325,13 +429,11 @@ try:
   
   @bot.slash_command(guild_ids=servers,name='latency',description='To get the bots response time.')
   @commands.cooldown(commandRateLimit,commandCoolDown,commands.BucketType.user)
-  @isBetaUser()
   async def latency(ctx):
       await ctx.respond(f"**Latency :** `{int(bot.latency*1000)}ms`")
   
   @bot.slash_command(guild_ids=servers,name='agent',description='Get a random agent.')
   @commands.cooldown(commandRateLimit,commandCoolDown * 2,commands.BucketType.user)
-  @isBetaUser()
   async def agent(ctx):
      embed = discord.Embed(title="Your Agent Is -", description=f"## LOADING...\n- ...", color=discord.Color.yellow())
      embed.set_image(url="https://cdn.dribbble.com/users/756637/screenshots/2249870/slot-machine-main-2.gif")
@@ -346,8 +448,7 @@ try:
   
   @bot.slash_command(guild_ids=servers, name='test_agents', description='test random agent command.')
   @commands.cooldown(commandRateLimit,commandCoolDown,commands.BucketType.user)
-  @isStaff()
-  @isBetaUser()
+  @isStaff("dev")
   async def test_agents(ctx):
       list = GetAgentList()
       await ctx.respond("Sending all agents 1 by 1...")
@@ -371,7 +472,6 @@ try:
   @bot.slash_command(guild_ids=servers, name='clear', description='Clears chat messages.')
   @commands.cooldown(commandRateLimit,commandCoolDown,commands.BucketType.user)
   @isStaff()
-  @isBetaUser()
   async def clear(ctx,amount=1):
       await ctx.defer(ephemeral=True)
       if int(amount) > 100:
@@ -406,7 +506,6 @@ try:
   
   @bot.slash_command(guild_ids=servers, name='balance', description='Check your balance.')
   @commands.cooldown(commandRateLimit,commandCoolDown * 2,commands.BucketType.user)
-  @isBetaUser()
   @hasAccount()
   async def balance(ctx,hidden: str = "true"):
       await ctx.defer(ephemeral=hidden.lower() not in ["false", "no"])
@@ -427,7 +526,6 @@ try:
   
   @bot.slash_command(guild_ids=servers, name='rob', description='Rob Someone.')
   @commands.cooldown(commandRateLimit,commandCoolDown * 4,commands.BucketType.user)
-  @isBetaUser()
   @hasAccount()
   async def rob(ctx : discord.ApplicationContext,user: Annotated[discord.Member, Option(discord.Member,"Select whose wallet you want to rob")]):
       await ctx.defer(ephemeral=True)
@@ -446,8 +544,8 @@ try:
       for rob in robbed:
           if rob["robber"] == ctx.author.id:
               return await ctx.respond(f"- **{xmarkEmoji} You just robbed someone wait sometime before you can rob again.**")
-  
-      if user.status.value in ['dnd','offline']:
+      
+      if user.status.value in ['offline']: # useCase - [dnd,offline]  
           return await ctx.respond(f"- **{xmarkEmoji} {user.display_name} is currently in `{user.status.value.upper()}` Mode, So you cannot rob them.**")
       if not rdb("accounts",str(user.id)):    
          return await ctx.respond(f"- **{xmarkEmoji} {user.display_name} Does not have a wallet.**")
@@ -479,7 +577,6 @@ try:
      
   @bot.slash_command(guild_ids=servers, name='findrobber', description='Find the person who robbed you.')
   @commands.cooldown(commandRateLimit,commandCoolDown,commands.BucketType.user)
-  @isBetaUser()
   @hasAccount()
   async def findrobber(ctx : discord.ApplicationContext,user: Annotated[discord.Member, Option(discord.Member,"Select the person who you think robbed you.")]):
       await ctx.defer()
@@ -530,7 +627,6 @@ try:
   
   @bot.slash_command(guild_ids=servers, name='deposit', description='Deposit your wallet money to bank.')
   @commands.cooldown(commandRateLimit,commandCoolDown * 2,commands.BucketType.user)
-  @isBetaUser()
   @hasAccount()
   async def deposit(ctx : discord.ApplicationContext,amount: int):
       await ctx.defer(ephemeral=True)
@@ -543,7 +639,6 @@ try:
   
   @bot.slash_command(guild_ids=servers, name='withdraw', description='Withdraw your bank money to wallet.')
   @commands.cooldown(commandRateLimit,commandCoolDown * 2,commands.BucketType.user)
-  @isBetaUser()
   @hasAccount()
   async def withdraw(ctx : discord.ApplicationContext,amount: int):
       await ctx.defer(ephemeral=True)
@@ -558,7 +653,6 @@ try:
   
   @bot.slash_command(guild_ids=servers, name='depall', description='Deposit all your money to bank.')
   @commands.cooldown(commandRateLimit,commandCoolDown * 5,commands.BucketType.user)
-  @isBetaUser()
   @hasAccount()
   async def depall(ctx : discord.ApplicationContext):
       await ctx.defer(ephemeral=True)
@@ -570,91 +664,59 @@ try:
       removeMoney(str(ctx.author.id),walletamount,"wallet")
       addMoney(str(ctx.author.id),walletamount,"bank")
       await ctx.respond(f"- **{tickEmoji} You successfully deposited all your money to your bank.**")
+  
+  
 
 
+  @bot.slash_command(guild_ids=servers, name='check_inv', description="See someone's inventory.")
+  @commands.cooldown(commandRateLimit, commandCoolDown * 5, commands.BucketType.user)
+  @isStaff(1)
+  async def check_inv(ctx: discord.ApplicationContext, user: discord.User,page: int = 1):
+      await ctx.defer(ephemeral=True)
+      data = rdb("accounts", str(user.id))
+
+      if data is None:
+          return await ctx.respond(f"- **{xmarkEmoji} User does not have an account.**")
+      
+      inventory = data["inventory"]
+      await CreatePages(ctx,inventory,
+      '','','',
+      False,True,
+      page,
+      f"{user.display_name}'s Inventory",
+      discord.Color.gold(),
+      12,
+      discord.ButtonStyle.primary)
+      
 
 
   @bot.slash_command(guild_ids=servers, name='inventory', description='Open your inventory.')
   @commands.cooldown(commandRateLimit, commandCoolDown * 3, commands.BucketType.user)
-  @isBetaUser()
   @hasAccount()
   async def inventory(ctx: discord.ApplicationContext, hidden: str = "true", page: int = 1):
       await ctx.defer(ephemeral=hidden.lower() not in ["false", "no"])
       data = rdb("accounts", str(ctx.author.id))
-      
-      items_per_page = 12
       inventory = data["inventory"]
-      total_pages = max((len(inventory) + items_per_page - 1) // items_per_page, 1)
-  
-      page = max(1, min(page, total_pages)) - 1 
-  
-      def create_embed(current_page: int) -> discord.Embed:
-          start = current_page * items_per_page
-          end = start + items_per_page
-          page_items = inventory[start:end]
-  
-          embed = discord.Embed(
-              title=f"{ctx.author.display_name}'s Inventory - Page {current_page + 1}/{total_pages}",
-              color=discord.Color.green()
-          )
-          if len(page_items) == 0:
-              embed.description = "## - Empty"  
 
-          for item in page_items:
-              itemData = GetItem(item["id"])
-              embed.add_field(
-                  name=f"{itemData["emoji"]} {itemData["name"]}",
-                  value=f"`x{item['amount']}`",
-                  inline=True
-              )
-          return embed
-  
-      current_page = page
-      embed = create_embed(current_page)
-  
-      class PaginationView(View):
-          def __init__(self):
-              super().__init__(timeout=60)
-              self.update_buttons()
-  
-          @discord.ui.button(label="", emoji="<:leftarrow:1327716449510494339>", style=discord.ButtonStyle.secondary)
-          async def previous_button(self, button: Button, interaction: discord.Interaction):
-              if interaction.user.id != ctx.author.id:
-                  return
-              nonlocal current_page
-              current_page = max(0, current_page - 1)
-              embed = create_embed(current_page)
-              self.update_buttons()
-              await interaction.response.edit_message(embed=embed, view=self)
-  
-          @discord.ui.button(label="", emoji="<:rightarrow:1327716447467733043>", style=discord.ButtonStyle.secondary)
-          async def next_button(self, button: Button, interaction: discord.Interaction):
-              if interaction.user.id != ctx.author.id:
-                  return
-              nonlocal current_page
-              current_page = min(total_pages - 1, current_page + 1)
-              embed = create_embed(current_page)
-              self.update_buttons()
-              await interaction.response.edit_message(embed=embed, view=self)
-  
-          def update_buttons(self):
-              self.previous_button.disabled = current_page <= 0
-              self.next_button.disabled = current_page >= total_pages - 1
-  
-      view = PaginationView()
-  
-      await ctx.respond(embed=embed, view=view)
+      await CreatePages(ctx,inventory,
+      '','','',
+      False,True,
+      page,
+      f"{ctx.author.display_name}'s Inventory",
+      discord.Color.green(),
+      12,
+      discord.ButtonStyle.primary)  
 
 
-  async def autocomplete_example(ctx: discord.AutocompleteContext):
+
+  async def autocomplete_modify_inventory(ctx: discord.AutocompleteContext):
     options = list(GetItems().keys())
     return [option for option in options if ctx.value.lower() in option.lower()]  
 
   @bot.slash_command(guild_ids=servers, name='modify_inventory', description='Add or Remove items from a inventory.')
   @commands.cooldown(commandRateLimit, commandCoolDown * 5, commands.BucketType.user)
-  @isBetaUser()
-  @isStaff()
-  async def modify_inventory(ctx: discord.ApplicationContext,user: discord.User,item_id:Annotated[str,Option(str, "Choose an item", autocomplete=autocomplete_example)],modification:int):
+  @isStaff(3)
+  async def modify_inventory(ctx: discord.ApplicationContext,user: discord.User,item_id:Annotated[str,Option(str, "Choose an item", autocomplete=autocomplete_modify_inventory)],modification:int):
       await ctx.defer(ephemeral=True)
       request = updateInventory(user.id,item_id,modification)
       if request["status"] == "error":
@@ -665,8 +727,7 @@ try:
 
   @bot.slash_command(guild_ids=servers, name='set_topic', description='Set current channel topic.')
   @commands.cooldown(commandRateLimit, commandCoolDown, commands.BucketType.user)
-  @isBetaUser()
-  @isStaff()
+  @isStaff(2)
   async def set_topic(ctx: discord.ApplicationContext, topic: str):
       await ctx.defer(ephemeral=True)
       await ctx.channel.edit(topic=topic)
@@ -676,7 +737,6 @@ try:
 
   @bot.slash_command(guild_ids=servers, name='collect', description='Collect your daily reward.')
   @commands.cooldown(commandRateLimit, commandCoolDown * 25, commands.BucketType.user)
-  @isBetaUser()
   @hasAccount()
   async def collect(ctx: discord.ApplicationContext):
     data = rdb('accounts', str(ctx.author.id))
@@ -718,13 +778,58 @@ try:
     udb('accounts', str(ctx.author.id),{"dailyReward":firestore.SERVER_TIMESTAMP})
     await ctx.respond(f"- {tickEmoji} **You have collected your daily reward.**")
     
+    
+  async def autocomplete_modify_moneyA(ctx: discord.AutocompleteContext):
+   return ["Add","Remove"]  
+  async def autocomplete_modify_moneyB(ctx: discord.AutocompleteContext):
+   return ["Bank","Wallet"]       
+  @bot.slash_command(guild_ids=servers, name='modify_money', description='Add or Remove Money from wallet or bank of a user.')
+  @commands.cooldown(commandRateLimit, commandCoolDown * 5, commands.BucketType.user)
+  @isStaff(3)
+  async def modify_money(ctx: discord.ApplicationContext, user: discord.User,amount: int,action: Annotated[str,Option(str, "Choose a action", autocomplete=autocomplete_modify_moneyA)],type: Annotated[str,Option(str, "Choose a type", autocomplete=autocomplete_modify_moneyB)]):
+      await ctx.defer(ephemeral=True)
+      if type.lower() == "bank":
+          if action.lower() == "add":
+              addMoney(user.id,amount,"bank")
+          elif action.lower() == "remove":
+              removeMoney(user.id,amount,"bank")
+          else:
+              await ctx.respond(f"- {xmarkEmoji} **Invalid action.**")
+              return
+      elif type.lower() == "wallet":
+          if action.lower() == "add":
+              addMoney(user.id,amount,"wallet")
+          elif action.lower() == "remove":
+              removeMoney(user.id,amount,"wallet")
+          else:
+              await ctx.respond(f"- {xmarkEmoji} **Invalid action.**")
+              return
+      else:
+          await ctx.respond(f"- {xmarkEmoji} **Invalid type.**")
+          return
+      await ctx.respond(f"- {tickEmoji} **{type} has been modified.**")
 
 
+  @bot.slash_command(guild_ids=servers, name='help', description='Get a list of all commands.')
+  @commands.cooldown(commandRateLimit, commandCoolDown, commands.BucketType.user)
+  async def help(ctx: discord.ApplicationContext,page: int = 1):
+    await ctx.defer(ephemeral=True)
+    
+    commands_info = [{"id":command.id,"name": command.name, "description": command.description,"staff": command.name in StaffCommands} for command in bot.commands]
+    
+    commands_info.sort(key=lambda cmd: (cmd["staff"] == True, cmd["name"].lower()))
 
-
-
-
-
+    
+    await CreatePages(
+      ctx,
+      commands_info,
+      "name","description",
+      False,True,False,
+      page,
+      "Here is a list of commands",
+      discord.Color.green(),
+      6,
+      discord.ButtonStyle.primary)
 
 
 
