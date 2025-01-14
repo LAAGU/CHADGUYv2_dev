@@ -136,20 +136,38 @@ agentArray : list[dict] = [
         }
     ]
 
+itemClasses: dict = {
+    "gadget": {
+        "name": "Gadget",
+        "description": "Gadgets are items that are used to perform a list of actions.",
+    },
+}
+
 items: dict = {
         "phone": {
             "name": "Phone",
             "emoji": "<:phone:1326689224749219982>",
-            "price": 1000
+            "price": 1000,
+            "class": "gadget"
         }
 }
 
-dailyRewards: dict = [
+dailyRewards: list[dict] = [
     {
         "amount": [50,200,500,1000,1200,1500,2000,2500,3000,4000,5000,6000,7000,8000,9000,10000],
         "name": "money"
     }
 ]
+
+def GetItemClasses() -> list[dict]:
+    return itemClasses
+
+def GetItemClass(id : str) -> dict:
+    for itemClass in itemClasses:
+        if itemClass.keys()[0] == id:
+            return itemClass
+    else:
+        return {"name": "Unknown", "description": "Unknown"}
 
 def GetRewards() -> list[dict]:
     return dailyRewards

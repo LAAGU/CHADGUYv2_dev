@@ -145,7 +145,14 @@ try:
   commandLogsChannel = 1325869256486686782
   xmarkEmoji = "<:xmark:1326705481854619680>"
   tickEmoji = "<:tick:1326705494198321294>"
-  StaffCommands = ['test_agents','modify_inventory','set_topic','clear','modify_money','check_inv']
+  StaffCommands = [
+    'test_agents',
+    'modify_inventory',
+    'set_topic',
+    'clear',
+    'modify_money',
+    'check_inv',
+    'check_balance']
   
   
   intents = discord.Intents.all()
@@ -352,7 +359,6 @@ try:
   
   @bot.event
   async def on_application_command_error(ctx,error):
-      print("the error: ",error)
       doubleStartUpErrorList = ["Application Command raised an exception: NotFound: 404 Not Found (error code: 10062): Unknown interaction","Application Command raised an exception: HTTPException: 400 Bad Request (error code: 40060): Interaction has already been acknowledged."] 
       if isinstance(error,commands.CommandOnCooldown):
           return await ctx.respond(f"- **{xmarkEmoji} {error}**",ephemeral=True,delete_after=2)
@@ -523,11 +529,29 @@ try:
   async def balance(ctx,hidden: str = "true"):
       await ctx.defer(ephemeral=hidden.lower() not in ["false", "no"])
       data = rdb("accounts",str(ctx.author.id))
-      embed = discord.Embed(title=f"Your Balance {ctx.author.display_name}", description=f"## <:_bank:1327722064307818496> : `${'{:,}'.format(data['money']['bank'])}`\n## <:_cash:1327722066660688012> : `${'{:,}'.format(data['money']['wallet'])}`\n- **Total :** `${'{:,}'.format(data['money']['wallet'] + data['money']['bank'])}`", color=discord.Color.green())
+      embed = discord.Embed(title=f"{ctx.author.display_name}'s Balance", color=discord.Color.green())
+      embed.add_field(name="<:_bank:1327722064307818496> Bank", value=f"```${'{:,}'.format(data['money']['bank'])}```", inline=True)
+      embed.add_field(name="<:_wallet:1328842337945780235> Wallet", value=f"```${'{:,}'.format(data['money']['wallet'])}```", inline=True)
+      embed.add_field(name="<:_total:1328842705156968581> Total", value=f"- ```${'{:,}'.format(data['money']['bank'] + data['money']['wallet'])}```", inline=False)
       await ctx.respond(embed=embed,ephemeral=hidden=="True")
   
   
-  
+  @bot.slash_command(guild_ids=servers, name='check_balance', description="Check someone's balance.")
+  @commands.cooldown(commandRateLimit,commandCoolDown * 2,commands.BucketType.user)
+  async def check_balance(ctx, user: discord.Member):
+    await ctx.defer(ephemeral=True)
+    data = rdb("accounts",str(user.id))
+    if data == None:
+        return await ctx.respond(f"- **{xmarkEmoji} This user does not have an account!**",ephemeral=True)
+
+    embed = discord.Embed(title=f"{user.display_name}'s Balance", color=discord.Color.green())
+    embed.add_field(name="<:_bank:1327722064307818496> Bank", value=f"```${'{:,}'.format(data['money']['bank'])}```", inline=True)
+    embed.add_field(name="<:_wallet:1328842337945780235> Wallet", value=f"```${'{:,}'.format(data['money']['wallet'])}```", inline=True)
+    embed.add_field(name="<:_total:1328842705156968581> Total", value=f"- ```${'{:,}'.format(data['money']['bank'] + data['money']['wallet'])}```", inline=False)
+    await ctx.respond(embed=embed,ephemeral=True)
+
+
+
   robbed = []
 
   async def handle_rob_removal(ctx, robbedData):
@@ -773,7 +797,7 @@ try:
     for reward in Rewards:
         if reward["name"] == "money":
             amount = random.randint(10,random.choice(reward["amount"]))
-            embed.add_field(name="<:_cash:1327722066660688012> Cash", value=f"`${'{:,}'.format(amount)}`", inline=True)
+            embed.add_field(name="<:_wallet:1328842337945780235> Cash", value=f"`${'{:,}'.format(amount)}`", inline=True)
     
     
     if amount == 10_000:
@@ -845,8 +869,78 @@ try:
       discord.ButtonStyle.primary)
 
 
+  @bot.slash_command(guild_ids=servers, name='itemlist', description='Get a list of all items and their details.')
+  @commands.cooldown(commandRateLimit, commandCoolDown, commands.BucketType.user)
+  async def itemlist(ctx: discord.ApplicationContext, page: int = 1):
+      await ctx.defer(ephemeral=True)
+      data = GetItems() 
+  
+      items_per_page = 9
+      total_pages = max((len(data) + items_per_page - 1) // items_per_page, 1)
+      page = max(1, min(page, total_pages)) - 1
+  
+      def create_embed(current_page: int) -> discord.Embed:
+          start = current_page * items_per_page
+          end = start + items_per_page
+          page_items = list(data.values())[start:end]
+  
+          embed = discord.Embed(
+              title=f"Here is a list of items - Page {current_page + 1}/{total_pages}",
+              color=discord.Color.gold()
+          )
 
+          embed.set_footer(text="Remember some items are secret items and will not show up in this list", icon_url="https://cdn-icons-png.flaticon.com/512/5683/5683325.png")  
 
+          if len(page_items) == 0:
+              embed.description = "## - Found Nothing!"
+
+          index = 1  
+          for item_id, item in zip(list(data.keys())[start:end], page_items):
+              if "secret" not in item:
+               embed.add_field(
+                   name=f"{index}. {item['emoji']} {item['name']}",
+                   value=f"```fix\nItemID - {item_id}\nPrice - {"{:,}".format(item['price'])}\nClass - {item['class']}\n```",
+                   inline=True
+               )
+               index += 1
+          return embed
+  
+      current_page = page
+      embed = create_embed(current_page)
+  
+      class PaginationView(View):
+          def __init__(self):
+              super().__init__(timeout=60)
+              self.update_buttons()
+  
+          @discord.ui.button(label="", emoji="<:leftarrow:1327716449510494339>", style=discord.ButtonStyle.primary)
+          async def previous_button(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              nonlocal current_page
+              current_page = max(0, current_page - 1)
+              embed = create_embed(current_page)
+              self.update_buttons()
+              await interaction.response.edit_message(embed=embed, view=self)
+  
+          @discord.ui.button(label="", emoji="<:rightarrow:1327716447467733043>", style=discord.ButtonStyle.primary)
+          async def next_button(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              nonlocal current_page
+              current_page = min(total_pages - 1, current_page + 1)
+              embed = create_embed(current_page)
+              self.update_buttons()
+              await interaction.response.edit_message(embed=embed, view=self)
+  
+          def update_buttons(self):
+              self.previous_button.disabled = current_page <= 0
+              self.next_button.disabled = current_page >= total_pages - 1
+  
+      view = PaginationView()
+      await ctx.respond(embed=embed, view=view)
+
+    
 
   
   settings = rdb('about-bot','settings')
