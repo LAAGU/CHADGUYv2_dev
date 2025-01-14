@@ -21,6 +21,9 @@ from colorama import Fore
 colorama.init(autoreset=True)
 
 try:
+  
+  print(Fore.WHITE + "Starting CHAD BOT...")
+  start_benchmark = time.time()
 
   def resource_path(relative_path):
     try:
@@ -229,9 +232,11 @@ try:
 
   @bot.event
   async def on_ready():
-      text = f"{bot.user.name} Started\nID: {bot.user.id}\nVersion: {str(version).removesuffix('.0')}"
-      print(Fore.LIGHTGREEN_EX + text)
-      print(Fore.CYAN + "Also Join Our Discord At: https://discord.gg/ZxaDHm6jc4")
+      benchmark = time.time() - start_benchmark
+      text = f"\n{Fore.LIGHTGREEN_EX + str(bot.user.name)} Started\n{Fore.LIGHTGREEN_EX + "ID:"} {Fore.BLUE + str(bot.user.id)}\n{Fore.LIGHTGREEN_EX + "Version:"} {Fore.BLUE + str(version).removesuffix('.0')}"
+      print(text)
+      print(Fore.LIGHTGREEN_EX + "Benchmark: " + Fore.BLUE + f"Took {benchmark:.2f} seconds to start.")
+      print(Fore.CYAN + "\nAlso Join Our Discord At: https://discord.gg/ZxaDHm6jc4")
   
 
   commandSpamWarnings = {}  
@@ -345,10 +350,16 @@ try:
   
   @bot.event
   async def on_application_command_error(ctx,error):
+      print("the error: ",error)
+      doubleStartUpErrorList = ["Application Command raised an exception: NotFound: 404 Not Found (error code: 10062): Unknown interaction","Application Command raised an exception: HTTPException: 400 Bad Request (error code: 40060): Interaction has already been acknowledged."] 
       if isinstance(error,commands.CommandOnCooldown):
-          await ctx.respond(f"- **{xmarkEmoji} {error}**",ephemeral=True,delete_after=2)
+          return await ctx.respond(f"- **{xmarkEmoji} {error}**",ephemeral=True,delete_after=2)
+      if str(error) in doubleStartUpErrorList:
+         print(Fore.RED + f"An error occurred: {str(error)}" + Fore.YELLOW + "\nThe issue might be that the bot was already running somewhere else when you turned it ON, Or someone turned it on after you did, This Error can be Ignored but it is suggested that you turn the bot off and try to use it on the server and if it works then you can be sure someone already has it running.")    
+         return     
       else:
-          raise error    
+          raise error
+          
   
   
   def hasAccount():
@@ -760,7 +771,7 @@ try:
     for reward in Rewards:
         if reward["name"] == "money":
             amount = random.randint(10,random.choice(reward["amount"]))
-            embed.add_field(name="# <:_cash:1327722066660688012> Cash", value=f"`${'{:,}'.format(amount)}`", inline=True)
+            embed.add_field(name="<:_cash:1327722066660688012> Cash", value=f"`${'{:,}'.format(amount)}`", inline=True)
     
     
     if amount == 10_000:
