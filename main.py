@@ -18,6 +18,7 @@ import asyncio
 import os,sys,re
 import colorama
 from colorama import Fore
+from playsound3 import playsound
 colorama.init(autoreset=True)
 
 try:
@@ -236,6 +237,7 @@ try:
       text = f"\n{Fore.LIGHTGREEN_EX + str(bot.user.name)} Started\n{Fore.LIGHTGREEN_EX + "ID:"} {Fore.BLUE + str(bot.user.id)}\n{Fore.LIGHTGREEN_EX + "Version:"} {Fore.BLUE + str(version).removesuffix('.0')}"
       print(text)
       print(Fore.LIGHTGREEN_EX + "Benchmark: " + Fore.BLUE + f"Took {benchmark:.2f} seconds to start.")
+      playsound(resource_path("./startsound.mp3"))
       print(Fore.CYAN + "\nAlso Join Our Discord At: https://discord.gg/ZxaDHm6jc4")
   
 
