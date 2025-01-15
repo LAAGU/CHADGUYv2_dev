@@ -19,6 +19,7 @@ import os,sys,re
 import colorama
 from colorama import Fore
 from playsound3 import playsound
+import copy
 colorama.init(autoreset=True)
 
 try:
@@ -940,9 +941,140 @@ try:
       view = PaginationView()
       await ctx.respond(embed=embed, view=view)
 
-    
-
+  @bot.slash_command(guild_ids=servers, name='recipes', description='Get a list of all crafting recipes.')
+  @commands.cooldown(commandRateLimit, commandCoolDown, commands.BucketType.user)
+  async def recipes(ctx: discord.ApplicationContext, page: int = 1):
+      await ctx.defer(ephemeral=True)
+      data = GetCraftingRecipes() 
   
+      items_per_page = 6
+      total_pages = max((len(data) + items_per_page - 1) // items_per_page, 1)
+      page = max(1, min(page, total_pages)) - 1
+  
+      def create_embed(current_page: int) -> discord.Embed:
+          start = current_page * items_per_page
+          end = start + items_per_page
+          page_items = list(data.values())[start:end]
+  
+          embed = discord.Embed(
+              title=f"Here is a list of all crafting recipes - Page {current_page + 1}/{total_pages}",
+              color=discord.Color.gold()
+          )
+
+
+          if len(page_items) == 0:
+              embed.description = "## - Found Nothing!"
+
+          index = 1  
+          for item_id, item in zip(list(data.keys())[start:end], page_items):
+               crafting_value = ",\n ".join([f"- {GetItem(entry['item'])["emoji"]} **{GetItem(entry['item'])["name"]}**`(x{entry['amount']})`" for entry in item])
+               embed.add_field(
+                   name=f"{index}. {GetItem(item_id)["emoji"]} {GetItem(item_id)["name"]}",
+                   value=crafting_value,
+                   inline=True
+               )
+               index += 1
+          return embed
+  
+      current_page = page
+      embed = create_embed(current_page)
+  
+      class PaginationView(View):
+          def __init__(self):
+              super().__init__(timeout=60)
+              self.update_buttons()
+  
+          @discord.ui.button(label="", emoji="<:leftarrow:1327716449510494339>", style=discord.ButtonStyle.primary)
+          async def previous_button(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              nonlocal current_page
+              current_page = max(0, current_page - 1)
+              embed = create_embed(current_page)
+              self.update_buttons()
+              await interaction.response.edit_message(embed=embed, view=self)
+  
+          @discord.ui.button(label="", emoji="<:rightarrow:1327716447467733043>", style=discord.ButtonStyle.primary)
+          async def next_button(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              nonlocal current_page
+              current_page = min(total_pages - 1, current_page + 1)
+              embed = create_embed(current_page)
+              self.update_buttons()
+              await interaction.response.edit_message(embed=embed, view=self)
+  
+          def update_buttons(self):
+              self.previous_button.disabled = current_page <= 0
+              self.next_button.disabled = current_page >= total_pages - 1
+  
+      view = PaginationView()
+      await ctx.respond(embed=embed, view=view)
+
+
+  async def autocomplete_craft(ctx: discord.AutocompleteContext):
+    craftData = GetCraftingRecipes()
+    hash = []
+    for recipe in craftData:
+        hash.append(recipe)
+    return hash
+            
+  @bot.slash_command(guild_ids=servers, name='craft', description='To craft an item.')
+  @commands.cooldown(commandRateLimit, commandCoolDown * 2, commands.BucketType.user)
+  @hasAccount()
+  async def craft(ctx: discord.ApplicationContext, item_id: Annotated[str, Option(str, autocomplete=autocomplete_craft)], amount: int = 1):
+      await ctx.defer(ephemeral=True)
+      craftData = GetCraftingRecipes()
+      
+      if str(item_id) not in craftData.keys():
+          return await ctx.respond(f"-  **{xmarkEmoji} Can't find a recipe for __{item_id}__, Try using the `/recipes` command to get the list of all recipes.**")
+      
+      userInv = rdb("accounts", str(ctx.author.id))["inventory"]
+      updated_inventory = copy.deepcopy(userInv) 
+  
+      for ingredients in craftData[str(item_id)]:
+          required_amount = ingredients["amount"] * amount
+          user_item = next((item for item in updated_inventory if item['id'] == ingredients['item']), None)
+  
+          if not user_item or user_item['amount'] < required_amount:
+              item_name = GetItem(ingredients["item"])["name"]
+              user_amount = user_item["amount"] if user_item else 0
+              return await ctx.respond(f"-  **{xmarkEmoji} You don't have enough __{item_name}__ in your inventory ({user_amount}/{required_amount}).**")
+          
+    
+          user_item['amount'] -= required_amount
+          if user_item['amount'] <= 0:
+              updated_inventory = [item for item in updated_inventory if item['id'] != ingredients['item']]
+  
+      crafted_item = GetItem(item_id) 
+      crafted_item_data = next((item for item in updated_inventory if item['id'] == item_id), None)
+      
+      if crafted_item_data:
+          crafted_item_data['amount'] += amount
+      else:
+          updated_inventory.append({
+              'id': item_id,
+              'amount': amount
+          })
+      
+      
+      udb("accounts", str(ctx.author.id), {"inventory": updated_inventory})
+      
+      await ctx.respond(f"-  **{tickEmoji} Successfully crafted `(x{amount})`{GetItem(item_id)["emoji"]} {GetItem(item_id)["name"]}.**")
+           
+
+
+
+
+
+
+
+
+
+
+
+
+
   settings = rdb('about-bot','settings')
   
   if settings == None:

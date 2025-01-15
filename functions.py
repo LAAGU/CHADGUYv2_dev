@@ -141,6 +141,10 @@ itemClasses: dict = {
         "name": "Gadget",
         "description": "Gadgets are items that are used to perform a list of actions.",
     },
+    "utility": {
+        "name": "Utility",
+        "description": "Utilities are items that are needed to run items that cannnot be ran without them.",
+    }
 }
 
 items: dict = {
@@ -149,7 +153,14 @@ items: dict = {
             "emoji": "<:phone:1326689224749219982>",
             "price": 1000,
             "class": "gadget"
-        }
+        },
+        "battery": {
+            "name": "Battery",
+            "emoji": "<:_battery:1328863097477271602>",
+            "price": 100,
+            "class": "utility"
+        },
+        
 }
 
 dailyRewards: list[dict] = [
@@ -158,6 +169,18 @@ dailyRewards: list[dict] = [
         "name": "money"
     }
 ]
+
+craftingRecipes: dict = {
+    "phone": [
+        {
+            "item": "battery",
+            "amount": 1
+        }
+    ]
+}
+
+def GetCraftingRecipes() -> dict:
+    return craftingRecipes
 
 def GetItemClasses() -> list[dict]:
     return itemClasses
