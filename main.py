@@ -1,7 +1,7 @@
 import discord
 import time
-from discord import ui, Button, Embed, Option
-from discord.ui import View
+from discord import ui, Embed, Option
+from discord.ui import View,Button
 from discord.ext import commands
 from typing import Annotated
 import datetime
@@ -11,7 +11,6 @@ import json
 import threading
 import firebase_admin
 from firebase_admin import credentials,firestore
-from functions import *
 import random
 from functools import wraps
 import asyncio
@@ -20,6 +19,7 @@ import colorama
 from colorama import Fore
 from playsound3 import playsound
 import copy
+import string
 colorama.init(autoreset=True)
 
 try:
@@ -34,6 +34,12 @@ try:
         base_path = os.path.abspath(".")
 
     return os.path.join(base_path, relative_path)
+
+
+  sys.path.insert(1, resource_path('bin'))
+
+  from bin.functions import *
+
   
 
   def get_product_version(file_path):
@@ -49,8 +55,8 @@ try:
 
   encryption_map, decryption_map = create_mapping()
   
-  version = get_product_version(resource_path('version_info.txt'))
-  cred = credentials.Certificate(resource_path("cbv2pk.json"))
+  version = get_product_version(resource_path('bin/version_info.txt'))
+  cred = credentials.Certificate(resource_path("bin/cbv2pk.json"))
   firebase_admin.initialize_app(cred)
   
   db = firestore.client()
@@ -144,8 +150,10 @@ try:
   staffRole = 1076075894722023435
   earlyAccessRole = 1097927212784693298
   commandLogsChannel = 1325869256486686782
-  xmarkEmoji = "<:xmark:1326705481854619680>"
-  tickEmoji = "<:tick:1326705494198321294>"
+  xmarkEmoji = "<:xmark2:1329251589424283680>"
+  tickEmoji = "<:tick2:1329251587524137020>"
+  infoEmoji = "<:_info:1329251517932371968>"
+  loaderEmoji = "<a:_loader:1329287855507509248>"
   StaffCommands = [
     'test_agents',
     'modify_inventory',
@@ -245,7 +253,7 @@ try:
       text = f"\n{Fore.LIGHTGREEN_EX + str(bot.user.name)} Started\n{Fore.LIGHTGREEN_EX + "ID:"} {Fore.BLUE + str(bot.user.id)}\n{Fore.LIGHTGREEN_EX + "Version:"} {Fore.BLUE + str(version).removesuffix('.0')}"
       print(text)
       print(Fore.LIGHTGREEN_EX + "Benchmark: " + Fore.BLUE + f"Took {benchmark:.2f} seconds to start.")
-      playsound(resource_path("./startsound.mp3"))
+      playsound(resource_path("bin/startsound.mp3"))
       print(Fore.CYAN + "\nAlso Join Our Discord At: https://discord.gg/ZxaDHm6jc4")
   
 
@@ -383,12 +391,69 @@ try:
                   return
           return wrapper
       return decorator
-  
-  
+  def captcha():
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(ctx, *args, **kwargs):
+            captcha_letters = [getRandomString(4,True),getRandomString(4,True),getRandomString(4,True),getRandomNumber(4),getRandomNumber(4),getRandomNumber(4)]
+            correct_answer = random.choice(captcha_letters)
+            other_options = random.sample([x for x in captcha_letters if x != correct_answer], 2)
+            options = [correct_answer] + other_options
+            random.shuffle(options)
+            await ctx.defer(ephemeral=True)
+            class CaptchaView(View):
+                def __init__(self):
+                    super().__init__(timeout=60)
+                    self.correct_answer = correct_answer
+                    self.user_verified = False
+
+                    for idx, option in enumerate(options):
+                        button = Button(
+                            label=option,
+                            style=discord.ButtonStyle.gray,
+                            custom_id=f"{option}-{idx}"
+                        )
+                        button.callback = self.button_callback
+                        self.add_item(button)
+
+                async def button_callback(self, interaction: discord.Interaction):
+                    if interaction.user != ctx.author:
+                        await interaction.response.send_message("This captcha isn't for you.")
+                        return
+                    clicked_option = interaction.data["custom_id"].split('-')[0]
+                    for item in self.children:
+                        item.disabled = True
+                        if item.custom_id.split('-')[0] == self.correct_answer:
+                            item.style = discord.ButtonStyle.green
+                        else:
+                            item.style = discord.ButtonStyle.red    
+
+                    
+                    if clicked_option == self.correct_answer:
+                        self.user_verified = True
+                        await interaction.response.edit_message(view=self)
+                        await func(ctx, *args, **kwargs)
+                    else:
+                        await interaction.response.edit_message(view=self)
+                        await ctx.respond(f"## {xmarkEmoji} You have failed the captcha!\n- **Clicked :**`{clicked_option}`\n- **Correct Answer :**`{self.correct_answer}`", ephemeral=True)
+                    self.stop()
+
+            view = CaptchaView()
+            await ctx.respond(
+                f"- **{infoEmoji} Please solve the captcha to use this command! : `{correct_answer}`**",
+                view=view,
+            )
+
+        return wrapper
+    return decorator  
   def excludeCMD(reason: str = "This command is non functional for sometime due to some issues."):
       def decorator(func):
           @wraps(func)
           async def wrapper(ctx, *args, **kwargs):
+                  roleID = 1071086388709167124
+                  role = discord.utils.get(ctx.author.roles, id=roleID)
+                  if role:
+                      return await func(ctx, *args, **kwargs)
                   await ctx.respond(f"- **{xmarkEmoji} {reason}**", ephemeral=True)
                   return
           return wrapper
@@ -455,7 +520,7 @@ try:
   @bot.slash_command(guild_ids=servers,name='agent',description='Get a random agent.')
   @commands.cooldown(commandRateLimit,commandCoolDown * 2,commands.BucketType.user)
   async def agent(ctx):
-     embed = discord.Embed(title="Your Agent Is -", description=f"## LOADING...\n- ...", color=discord.Color.yellow())
+     embed = discord.Embed(title="Your Agent Is -", description=f"## LOADING...\n- {loaderEmoji}", color=discord.Color.yellow())
      embed.set_image(url="https://cdn.dribbble.com/users/756637/screenshots/2249870/slot-machine-main-2.gif")
      msg = await ctx.respond(embed=embed)
      await asyncio.sleep(1.5)
@@ -874,9 +939,96 @@ try:
   @commands.cooldown(commandRateLimit, commandCoolDown, commands.BucketType.user)
   async def itemlist(ctx: discord.ApplicationContext, page: int = 1):
       await ctx.defer(ephemeral=True)
-      data = GetItems() 
+      data = GetItems()
+  
+      grouped_items = {}
+      for item_id, item in data.items():
+          item_class = item.get('class', 'misc')
+          if item_class not in grouped_items:
+              grouped_items[item_class] = []
+          grouped_items[item_class].append((item_id, item))
+  
+
+      sorted_classes = sorted([cls for cls in grouped_items if cls != 'misc']) + ['misc']
+  
+
+      for cls in grouped_items:
+          grouped_items[cls].sort(key=lambda x: x[1]['name'])
+  
+
+      sorted_items = []
+      for cls in sorted_classes:
+          sorted_items.extend(grouped_items[cls])
   
       items_per_page = 9
+      total_pages = max((len(sorted_items) + items_per_page - 1) // items_per_page, 1)
+      page = max(1, min(page, total_pages)) - 1
+  
+      def create_embed(current_page: int) -> discord.Embed:
+          start = current_page * items_per_page
+          end = start + items_per_page
+          page_items = sorted_items[start:end]
+  
+          embed = discord.Embed(
+              title=f"Here is a list of items - Page {current_page + 1}/{total_pages}",
+              color=discord.Color.gold()
+          )
+          embed.set_footer(text="Remember some items are secret items and will not show up in this list", 
+                           icon_url="https://cdn-icons-png.flaticon.com/512/5683/5683325.png")
+  
+          if len(page_items) == 0:
+              embed.description = "## - Found Nothing!"
+  
+          for index, (item_id, item) in enumerate(page_items, start=1):
+              if "secret" not in item:
+                  embed.add_field(
+                      name=f"{index}. {item['emoji']} {item['name']}",
+                      value=f"```js\nId = {item_id}\nPrice = {"{:,}".format(item['price'])}\nClass = {item['class']}\n```",
+                      inline=True
+                  )
+          return embed
+  
+      current_page = page
+      embed = create_embed(current_page)
+  
+      class PaginationView(View):
+          def __init__(self):
+              super().__init__(timeout=60)
+              self.update_buttons()
+  
+          @discord.ui.button(label="", emoji="<:leftarrow:1327716449510494339>", style=discord.ButtonStyle.primary)
+          async def previous_button(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              nonlocal current_page
+              current_page = max(0, current_page - 1)
+              embed = create_embed(current_page)
+              self.update_buttons()
+              await interaction.response.edit_message(embed=embed, view=self)
+  
+          @discord.ui.button(label="", emoji="<:rightarrow:1327716447467733043>", style=discord.ButtonStyle.primary)
+          async def next_button(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              nonlocal current_page
+              current_page = min(total_pages - 1, current_page + 1)
+              embed = create_embed(current_page)
+              self.update_buttons()
+              await interaction.response.edit_message(embed=embed, view=self)
+  
+          def update_buttons(self):
+              self.previous_button.disabled = current_page <= 0
+              self.next_button.disabled = current_page >= total_pages - 1
+  
+      view = PaginationView()
+      await ctx.respond(embed=embed, view=view)
+
+  @bot.slash_command(guild_ids=servers, name='classlist', description='Get a list of ItemClasses and their details.')
+  @commands.cooldown(commandRateLimit, commandCoolDown, commands.BucketType.user)
+  async def classlist(ctx: discord.ApplicationContext, page: int = 1):
+      await ctx.defer(ephemeral=True)
+      data = GetItemClasses()
+      items_per_page = 5
       total_pages = max((len(data) + items_per_page - 1) // items_per_page, 1)
       page = max(1, min(page, total_pages)) - 1
   
@@ -886,22 +1038,20 @@ try:
           page_items = list(data.values())[start:end]
   
           embed = discord.Embed(
-              title=f"Here is a list of items - Page {current_page + 1}/{total_pages}",
+              title=f"Here is a list of all ItemClasses - Page {current_page + 1}/{total_pages}",
               color=discord.Color.gold()
           )
 
-          embed.set_footer(text="Remember some items are secret items and will not show up in this list", icon_url="https://cdn-icons-png.flaticon.com/512/5683/5683325.png")  
 
           if len(page_items) == 0:
               embed.description = "## - Found Nothing!"
 
           index = 1  
           for item_id, item in zip(list(data.keys())[start:end], page_items):
-              if "secret" not in item:
                embed.add_field(
-                   name=f"{index}. {item['emoji']} {item['name']}",
-                   value=f"```fix\nItemID - {item_id}\nPrice - {"{:,}".format(item['price'])}\nClass - {item['class']}\n```",
-                   inline=True
+                   name=f"{index}. {item["name"]}",
+                   value=f"```{item["description"]}```",
+                   inline=False
                )
                index += 1
           return embed
@@ -940,6 +1090,8 @@ try:
   
       view = PaginationView()
       await ctx.respond(embed=embed, view=view)
+  
+      
 
   @bot.slash_command(guild_ids=servers, name='recipes', description='Get a list of all crafting recipes.')
   @commands.cooldown(commandRateLimit, commandCoolDown, commands.BucketType.user)
@@ -1063,9 +1215,26 @@ try:
       await ctx.respond(f"-  **{tickEmoji} Successfully crafted `(x{amount})`{GetItem(item_id)["emoji"]} {GetItem(item_id)["name"]}.**")
            
 
+  @bot.slash_command(guild_ids=servers, name='fish', description='To do fishing and find some stuff.')
+  @commands.cooldown(commandRateLimit, commandCoolDown * 6, commands.BucketType.user)
+  @excludeCMD("Command is under development")
+  @hasAccount()
+  @captcha()
+  async def fish(ctx: discord.ApplicationContext):
+    file = discord.File(resource_path("bin/fishing.gif"))
+    embed = discord.Embed(title=f"</fish:1329259730039738449>", color=discord.Color.green())
+    embed.description = f"**{loaderEmoji} Waiting For a Catch**"
+    embed.set_image(url="attachment://fishing.gif")
+
+    waiting_msg = await ctx.followup.send(file=file,embed=embed,ephemeral=False)
+
+    catchableItems = [
+        "cell"
+    ]
 
 
 
+   
 
 
 
