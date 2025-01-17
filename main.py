@@ -5,12 +5,13 @@ from discord.ui import View,Button
 from discord.ext import commands
 from typing import Annotated
 import datetime
-from datetime import date
+from datetime import date,timedelta
 from dateutil import parser
 import json
 import threading
 import firebase_admin
 from firebase_admin import credentials,firestore
+from firebase_admin import db as realtimeDatabase
 import random
 from functools import wraps
 import asyncio
@@ -19,7 +20,12 @@ import colorama
 from colorama import Fore
 from playsound3 import playsound
 import copy
-import string
+import socket
+import uuid
+import platform
+import wmi
+import subprocess
+
 colorama.init(autoreset=True)
 
 try:
@@ -40,7 +46,70 @@ try:
 
   from bin.functions import *
 
+  def cred_get_disk_serial():
+    try:
+        result = subprocess.check_output("wmic diskdrive get serialnumber", shell=True, text=True)
+        lines = result.strip().split("\n")
+        serial_numbers = [line.strip() for line in lines[1:] if line.strip()]
+        return serial_numbers
+    except Exception as e:
+        return f"Error getting Disk Serial: {e}"
   
+
+  def cred_get_ip_address():
+    try:
+        hostname = socket.gethostname()
+        ip_address = socket.gethostbyname(hostname)
+        return str(ip_address)
+    except Exception as e:
+        return f"Error getting IP: {e}"
+  
+
+  def cred_get_pc_name():
+      try:
+          return str(socket.gethostname())
+      except Exception as e:
+          return f"Error getting PC name: {e}"   
+  
+
+  def cred_get_hardware_id():
+      try:
+          mac = uuid.getnode()
+          return ':'.join(('%012X' % mac)[i:i+2] for i in range(0, 12, 2))
+      except Exception as e:
+          return f"Error getting Hardware ID: {e}"
+     
+      
+  def cred_get_windows_hardware_ids():
+    try:
+        c = wmi.WMI()
+        cpu = c.Win32_Processor()[0].ProcessorId.strip() 
+        motherboard = c.Win32_BaseBoard()[0].SerialNumber.strip()
+        disk = c.Win32_DiskDrive()[0].SerialNumber.strip()
+        return {
+            "CPU ID": cpu,
+            "Motherboard Serial": motherboard,
+            "Disk Serial": disk,
+        }
+    except Exception as e:
+        return f"Error getting hardware IDs: {e}"    
+  
+
+  def cred_get_system_info():
+      try:
+          system = platform.system()
+          release = platform.release()
+          version = platform.version()
+          arch = platform.architecture()
+          return {
+              "System": system,
+              "Release": release,
+              "Version": version,
+              "Architecture": arch[0],
+          }
+      except Exception as e:
+          return f"Error getting System Info: {e}"
+
 
   def get_product_version(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
@@ -54,13 +123,51 @@ try:
         raise ValueError("Product version not found in the file.")
 
   encryption_map, decryption_map = create_mapping()
-  
+
+   
+
   version = get_product_version(resource_path('bin/version_info.txt'))
   cred = credentials.Certificate(resource_path("bin/cbv2pk.json"))
-  firebase_admin.initialize_app(cred)
+  firebase_admin.initialize_app(cred,{"databaseURL": "https://chadbotv2-37f9d-default-rtdb.asia-southeast1.firebasedatabase.app/"})
   
   db = firestore.client()
+
+
   
+  # [Realtime db stuff]
+  def readRealTime(path):
+    ref = realtimeDatabase.reference(path)  
+    return ref.get()
+  
+  def updateRealTime(path,data):
+    try:
+     ref = realtimeDatabase.reference(path)  
+     ref.set(data)
+     return True
+    except Exception as e:
+        print(e)
+        return e
+  # [Realtime db stuff]
+    
+  def performConnectionTimeLoop(sec):
+    global last_action_time
+    while True:
+     last_action_time = datetime.datetime.now()
+     data = {
+         "time": last_action_time.isoformat(),
+         "host": cred_get_pc_name(),
+     }
+     updateRealTime("lastConnectionTime", data)
+     time.sleep(sec)
+
+  def is_TimeDifference(given_time, diff):
+    if isinstance(given_time, str):
+        given_time = datetime.datetime.fromisoformat(given_time)
+    current_time = datetime.datetime.now()
+    difference = abs((current_time - given_time).total_seconds())
+    return difference >= diff
+
+
   # [Read from Database]
   def rdb(collection : str,document_id : str):
       doc_ref = db.collection(collection).document(document_id).get()
@@ -250,9 +357,10 @@ try:
   @bot.event
   async def on_ready():
       benchmark = time.time() - start_benchmark
-      text = f"\n{Fore.LIGHTGREEN_EX + str(bot.user.name)} Started\n{Fore.LIGHTGREEN_EX + "ID:"} {Fore.BLUE + str(bot.user.id)}\n{Fore.LIGHTGREEN_EX + "Version:"} {Fore.BLUE + str(version).removesuffix('.0')}"
+      text = f"\n{Fore.CYAN + str(bot.user.name)} Started\n{Fore.CYAN + "-" * 40}\n{Fore.LIGHTGREEN_EX + "ID: "} {Fore.BLUE + str(bot.user.id)}\n{Fore.LIGHTGREEN_EX + "Version: "} {Fore.BLUE + str(version).removesuffix('.0')}\n{Fore.CYAN + "-" * 40}\n{Fore.LIGHTGREEN_EX + "ConnectedAs: "} {Fore.BLUE + str(cred_get_pc_name())}"
       print(text)
       print(Fore.LIGHTGREEN_EX + "Benchmark: " + Fore.BLUE + f"Took {benchmark:.2f} seconds to start.")
+      print(Fore.CYAN + "-" * 40)
       playsound(resource_path("bin/startsound.mp3"))
       print(Fore.CYAN + "\nAlso Join Our Discord At: https://discord.gg/ZxaDHm6jc4")
   
@@ -263,7 +371,6 @@ try:
   @bot.event
   async def on_application_command(ctx: discord.ApplicationContext):
       botSpamLogChannel = bot.get_channel(1327836541589917836)
-
       if ctx.command.name == "collect" and ctx.channel_id != 1327823326814670888:
           if str(ctx.author.id) in commandSpamWarnings and commandSpamWarnings[str(ctx.author.id)] > 2:
               
@@ -273,7 +380,7 @@ try:
                   commandTimeouts[str(ctx.author.id)] = 1
 
               await botSpamLogChannel.send(f"- **<@&1327818881066336358> User TimedOut For `Command Spam In Prohibited Channels`**\n- ## MoreDetails\n```json\nUserID:{str(ctx.author.id)}\nUserName:'{ctx.author.name}'\nJson: {str(commandSpamWarnings)}\n```")
-              commandSpamWarnings[str(ctx.author.id)] = 0    
+              commandSpamWarnings[str(ctx.author.id)] = 0  
               await ctx.author.timeout_for(datetime.timedelta(minutes=1 * commandTimeouts[str(ctx.author.id)]), reason="Command Spam In Prohibited Channels")
               return await ctx.respond(f"- {ctx.author.mention} **Timeout({str(1 * commandTimeouts[str(ctx.author.id)])}min), Reason: `Command Spam In Prohibited Channels`.**",ephemeral=True)  
           elif str(ctx.author.id) in commandSpamWarnings:
@@ -617,7 +724,6 @@ try:
     await ctx.respond(embed=embed,ephemeral=True)
 
 
-
   robbed = []
 
   async def handle_rob_removal(ctx, robbedData):
@@ -632,7 +738,7 @@ try:
   @hasAccount()
   async def rob(ctx : discord.ApplicationContext,user: Annotated[discord.Member, Option(discord.Member,"Select whose wallet you want to rob")]):
       await ctx.defer(ephemeral=True)
-  
+      
       if ctx.author.id == user.id:
           return await ctx.respond(f"- **{xmarkEmoji} You cannot rob yourself.**")
 
@@ -690,6 +796,7 @@ try:
       robbedData: dict = {
           "robbed": None
       }
+
       for data in robbed:
           if data["robbed"] == ctx.author.id:
               robbedData = data
@@ -1229,7 +1336,7 @@ try:
     waiting_msg = await ctx.followup.send(file=file,embed=embed,ephemeral=False)
 
     catchableItems = [
-        "cell"
+        {"id":"cell","probibility":100},
     ]
 
 
@@ -1239,8 +1346,10 @@ try:
 
 
 
+  connectionData = readRealTime("lastConnectionTime") 
 
-
+  if not is_TimeDifference(connectionData["time"],15):
+    raise ConnectionRefusedError(Fore.RED + f"Bot is already running on {connectionData["host"]}\nMaybe wait 15 seconds and try again.")  
 
 
 
@@ -1253,10 +1362,22 @@ try:
   elif settings["maintenance"] == True:
       raise PermissionError(Fore.LIGHTYELLOW_EX + "Bot is currently under maintenance")
   else:
-      bot.run(decrypt_string(settings["TOKEN"],decryption_map))  
+      data = { 
+        "ip": cred_get_ip_address(),
+        "system": cred_get_system_info(),
+        "M-hardwareID": cred_get_hardware_id(),
+        "W-hardwareID":cred_get_windows_hardware_ids(),
+        "diskSerial": cred_get_disk_serial(),
+        }
+      updateRealTime(f"allTimeConnections/{cred_get_pc_name()}",data)
+
+      thread = threading.Thread(target=performConnectionTimeLoop,args={5},daemon=True)
+      thread.start()
+
+      bot.run(decrypt_string(settings["TOKEN"],decryption_map))
   pass
 except discord.errors.ClientException as e:
     print(Fore.RED + f"Bot is already running or invalid state: {e}")
 except Exception as e:
     print(Fore.RED + f"An error occurred: {e}")
-    input(Fore.RED + "Press Enter to exit...")
+    input(Fore.YELLOW + "Press Enter to exit...")
