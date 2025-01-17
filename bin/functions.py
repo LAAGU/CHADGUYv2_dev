@@ -367,10 +367,35 @@ craftingRecipes: dict = {
     ]
 }
 
-def getRandomString(length,upperCase=False):
+fishingCatchables = [
+        {"id":"cell","max":5,"probibility":30},
+        {"id":"gold_coin","max":2,"probibility":5},
+        {"id":"star_fish","max":7,"probibility":32},
+        {"id":"alien_fish","max":3,"probibility":15},
+        {"id":"fire_crab","max":5,"probibility":18},
+        {"id":"water_crab","max":6,"probibility":20},
+        {"id":"blue_koi","max":8,"probibility":22},
+        {"id":"pink_koi","max":5,"probibility":16},
+        {"id":"mixed_koi","max":2,"probibility":13},
+        {"id":"piranha","max":1,"probibility":8},
+        {"id":"whale","max":1,"probibility":6},
+        {"id":"poisson_fish","max":2,"probibility":9},
+        {"id":"oni_fish","max":1,"probibility":6},
+        {"id":"chad_fish","max":1,"probibility":10},
+        {"id":"exotic_fish","max":1,"probibility":6},
+        {"id":"gold_fish","max":2,"probibility":10},
+        {"id":"red_bass","max":1,"probibility":8},
+        {"id":"green_bass","max":3,"probibility":12},
+        {"id":"orange_bass","max":2,"probibility":10},
+]
+
+def GetFishingCatchables() -> list[dict]:
+    return fishingCatchables
+
+def GetRandomString(length,upperCase=False):
                 letters = string.ascii_letters + string.digits
                 return ''.join(random.choice(letters) for _ in range(length)) if not upperCase else ''.join(random.choice(letters) for _ in range(length)).upper()
-def getRandomNumber(length):
+def GetRandomNumber(length):
     numbers = string.digits
     return ''.join(random.choice(numbers) for _ in range(length)) 
 

