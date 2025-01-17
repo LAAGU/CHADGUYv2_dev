@@ -1344,6 +1344,24 @@ try:
       await ctx.respond(f"-  **{tickEmoji} Successfully crafted `(x{amount})`{GetItem(item_id)["emoji"]} {GetItem(item_id)["name"]}.**")
            
 
+  @bot.slash_command(guild_ids=servers, name='pay', description='To give someone cash from your wallet.')
+  @commands.cooldown(commandRateLimit, commandCoolDown * 4, commands.BucketType.user)
+  @hasAccount()
+  @captcha()
+  async def pay(ctx: discord.ApplicationContext, user: discord.User, amount: int):
+    try:
+       userWallet = rdb("accounts", str(user.id))["money"]["wallet"]
+    except:
+        return await ctx.followup.send(f"-  **{xmarkEmoji} {user.display_name} doesn't have an account.**",ephemeral=True)
+    
+    senderWallet = rdb("accounts",str(ctx.author.id))["money"]["wallet"]
+    if amount > senderWallet:
+        return await ctx.followup.send(f"-  **{xmarkEmoji} You don't have `${"{:,}".format(amount)}` in your wallet.**\n> **YourWallet: **`${"{:,}".format(senderWallet)}`",ephemeral=True)
+    removeMoney(str(ctx.author.id),amount,"wallet")
+    addMoney(str(user.id),amount,"wallet")
+    await ctx.followup.send(f"-  **{tickEmoji} Gave `${"{:,}".format(amount)}` cash to {user.display_name}**",ephemeral=True)
+
+
   @bot.slash_command(guild_ids=servers, name='fish', description='To do fishing and find some stuff.')
   @commands.cooldown(commandRateLimit, commandCoolDown * 6, commands.BucketType.user)
   @excludeCMD("Command is under development")
