@@ -3,7 +3,7 @@
 # Company information and file properties
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(2, 1, 1, 0),  # File version
+    filevers=(8, 0, 0, 0),  # File version
     prodvers=(2, 1, 1, 0),  # Product version
     mask=0x3f,              # File flags mask
     flags=0x0,              # File flags
@@ -20,7 +20,7 @@ VSVersionInfo(
         [
           StringStruct(u'CompanyName', u'By Sukrit Thakur'),
           StringStruct(u'FileDescription', u'CHAD GUY BOT V2'),
-          StringStruct(u'FileVersion', u'2.1.1.0'),
+          StringStruct(u'FileVersion', u'8.0.0.0'),
           StringStruct(u'InternalName', u'ChadGuyV2'),
           StringStruct(u'LegalCopyright', u'(c) 2025 Sukrit Thakur'),
           StringStruct(u'OriginalFilename', u'ChadBotV2.exe'),

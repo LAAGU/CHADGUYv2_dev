@@ -1399,8 +1399,7 @@ try:
 
 
   @bot.slash_command(guild_ids=servers, name='fish', description='To do fishing and find some stuff.')
-  @commands.cooldown(commandRateLimit, commandCoolDown * 6, commands.BucketType.user)
-  @excludeCMD("Command is under development")
+  @commands.cooldown(commandRateLimit, commandCoolDown * 6, commands.BucketType.user)   
   @hasAccount()
   @captcha()
   async def fish(ctx: discord.ApplicationContext):
@@ -1472,6 +1471,145 @@ try:
 
     await ctx.followup.send(embed=embed,file=file,ephemeral=False)
 
+
+  async def autocomplete_buy(ctx: discord.AutocompleteContext):
+    data = GetTradableItems()
+    hash = []
+    for item in data:
+        hash.append(item)
+    return hash
+    
+  @bot.slash_command(guild_ids=servers, name='buy', description='To buy an item from the shop.')
+  @commands.cooldown(commandRateLimit, commandCoolDown * 2 , commands.BucketType.user)
+  @captcha()
+  @hasAccount()
+  async def buy(ctx: discord.ApplicationContext,item_id: Annotated[str, Option(str, autocomplete=autocomplete_buy)],amount: int = 1):
+    if amount < 0:
+        return await ctx.respond(f"-  **{xmarkEmoji} You can't buy negative amount of items.**",ephemeral=True)
+    data = GetTradableItems()
+    if item_id not in data:
+        return await ctx.respond(f"- **{xmarkEmoji} __{item_id}__ is not available in the Shop.**",ephemeral=True)
+    shopData = readRealTime("botData")
+    discount = shopData["shopDiscount"]
+    itemPrice = GetDiscount(discount,data[item_id]["price"]) * amount
+    userWallet = rdb("accounts", str(ctx.author.id))["money"]["wallet"]
+
+    if itemPrice > userWallet:
+        return await ctx.respond(f"-  **{xmarkEmoji} You don't have `${"{:,}".format(itemPrice)}` in your wallet to buy `(x{amount})` {GetItem(item_id)['emoji']} {GetItem(item_id)['name']}.**\n> **YourWallet: **`${"{:,}".format(userWallet)}`",ephemeral=True)
+    
+    class askView(View):
+        def __init__(self):
+            super().__init__(timeout=60)
+            self.status = None
+            self.update_buttons()
+
+        @discord.ui.button(label="BUY", emoji=tickEmoji, style=discord.ButtonStyle.blurple)
+        async def previous_button(self, button: Button, interaction: discord.Interaction):
+            if interaction.user.id != ctx.author.id:
+                return
+            self.status = "buy"
+            self.update_buttons()
+            await interaction.response.edit_message(content=f"- **{tickEmoji} Purchased `x{amount}`{GetItem(item_id)['emoji']} {GetItem(item_id)['name']} for `${"{:,}".format(itemPrice)}`.**",view=self)
+
+        @discord.ui.button(label="CANCEL", emoji=xmarkEmoji, style=discord.ButtonStyle.blurple)
+        async def next_button(self, button: Button, interaction: discord.Interaction):
+            if interaction.user.id != ctx.author.id:
+                return
+            self.status = "cancel"
+            self.update_buttons()
+            await interaction.response.edit_message(content=f"- **{xmarkEmoji} Transaction Cancelled.**",view=self)
+
+        def update_buttons(self):
+            if self.status == "buy":
+                self.previous_button.disabled = True
+                self.next_button.disabled = True
+                try:
+                    removeMoney(str(ctx.author.id), itemPrice, "wallet")
+                    updateInventory(str(ctx.author.id),item_id,amount)
+                    self.previous_button.label = "Bought"
+                except Exception as e:
+                    print(e)
+                    self.previous_button.label = "Error Check Console"      
+
+                self.remove_item(self.next_button)
+            elif self.status == "cancel":
+                self.previous_button.disabled = True
+                self.next_button.disabled = True
+                self.next_button.label = "Cancelled"
+                self.remove_item(self.previous_button)
+
+    view = askView()
+    await ctx.respond(f"- **{infoEmoji} Are you sure you want to buy `x{amount}`{GetItem(item_id)["emoji"]} {GetItem(item_id)["name"]} for `${"{:,}".format(itemPrice * amount)}`?**", view=view,ephemeral=True)
+
+    
+  @bot.slash_command(guild_ids=servers, name='sell', description='To sell an item from your inventory.')
+  @commands.cooldown(commandRateLimit, commandCoolDown * 2, commands.BucketType.user)
+  @captcha()
+  @hasAccount()
+  async def sell(ctx: discord.ApplicationContext, item_id: Annotated[str, Option(str, autocomplete=autocomplete_buy)], amount: int = 1):
+      if amount < 0:
+          return await ctx.respond(f"-  **{xmarkEmoji} You can't sell a negative amount of items.**", ephemeral=True)
+      data = GetTradableItems()
+      if item_id not in data:
+          return await ctx.respond(f"- **{xmarkEmoji} __{item_id}__ is not tradable in the Shop.**", ephemeral=True)
+      
+      inventory = rdb("accounts", str(ctx.author.id))["inventory"]
+      itemAmountInINV = 0
+      for item in inventory:
+          if item["id"] == item_id:
+              itemAmountInINV += item["amount"]
+
+      if itemAmountInINV < amount:
+          return await ctx.respond(f"-  **{xmarkEmoji} You don't have `(x{amount})` of `{GetItem(item_id)['name']}` to sell.**", ephemeral=True)
+      
+      
+      shopData = readRealTime("botData")
+      sellPrice = math.floor(data[item_id]["price"] * amount * shopData["sellMultiplier"])
+  
+      class askView(View):
+          def __init__(self):
+              super().__init__(timeout=60)
+              self.status = None
+              self.update_buttons()
+  
+          @discord.ui.button(label="SELL", emoji=tickEmoji, style=discord.ButtonStyle.blurple)
+          async def sell_button(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              self.status = "sell"
+              self.update_buttons()
+              await interaction.response.edit_message(content=f"- **{tickEmoji} Sold `x{amount}` {GetItem(item_id)['emoji']} {GetItem(item_id)['name']} for `${"{:,}".format(sellPrice)}`.**", view=self)
+  
+          @discord.ui.button(label="CANCEL", emoji=xmarkEmoji, style=discord.ButtonStyle.blurple)
+          async def cancel_button(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              self.status = "cancel"
+              self.update_buttons()
+              await interaction.response.edit_message(content=f"- **{xmarkEmoji} Transaction Cancelled.**", view=self)
+  
+          def update_buttons(self):
+              if self.status == "sell":
+                  self.sell_button.disabled = True
+                  self.cancel_button.disabled = True
+                  try:
+                      addMoney(str(ctx.author.id), sellPrice, "wallet")
+                      updateInventory(str(ctx.author.id), item_id, -amount)
+                      self.sell_button.label = "Sold"
+                  except Exception as e:
+                      print(e)
+                      self.sell_button.label = "Error Check Console"
+  
+                  self.remove_item(self.cancel_button)
+              elif self.status == "cancel":
+                  self.sell_button.disabled = True
+                  self.cancel_button.disabled = True
+                  self.cancel_button.label = "Cancelled"
+                  self.remove_item(self.sell_button)
+  
+      view = askView()
+      await ctx.respond(f"- **{infoEmoji} Are you sure you want to sell `x{amount}` {GetItem(item_id)['emoji']} {GetItem(item_id)['name']} for `${"{:,}".format(sellPrice)}`?**", view=view, ephemeral=True)  
+    
 
   @bot.slash_command(guild_ids=servers, name='shop', description='To check item prices.')
   @commands.cooldown(commandRateLimit, commandCoolDown * 2 , commands.BucketType.user)
@@ -1555,6 +1693,65 @@ try:
 
     view = PaginationView()
     await ctx.respond(embed=embed, view=view)
+
+  
+  @bot.slash_command(guild_ids=servers, name="draghell", description="To put a user in drag hell.")
+  @commands.cooldown(commandRateLimit, commandCoolDown * 2, commands.BucketType.user)
+  async def draghell(ctx: discord.ApplicationContext, user: discord.Member,drag_count: int = 5):
+      await ctx.defer(ephemeral=True)
+
+      if drag_count < 1 or drag_count > 15:
+          return await ctx.respond(f"- {xmarkEmoji} **Drag count must be between 1 and 15.**")
+      
+      role = discord.utils.get(ctx.author.roles, id=1330062042543030292)
+      if not role:
+          return await ctx.respond(
+              f"- {xmarkEmoji} **You don't have permission to use this command.**"
+          )
+      
+      user_channel = next((vc for vc in ctx.guild.voice_channels if user in vc.members), None)
+      if not user_channel:
+          return await ctx.respond(
+              f"- {xmarkEmoji} **User is not in a voice channel.**"
+          )
+      
+      allowed_channels = [
+          discord.utils.get(ctx.guild.voice_channels, id=1055482969038520361),
+          discord.utils.get(ctx.guild.voice_channels, id=1055483012994838559),
+      ]
+      
+      if None in allowed_channels:
+          return await ctx.respond(f"- {xmarkEmoji} **Some voice channels are missing.**")
+      
+      last_channel = None
+  
+      for _ in range(drag_count):
+          target_channel = random.choice(allowed_channels)
+          while target_channel == last_channel:
+              target_channel = random.choice(allowed_channels)
+          
+          try:
+              await asyncio.sleep(0.1)
+              await user.move_to(target_channel)
+              last_channel = target_channel
+          except discord.Forbidden:
+              return await ctx.respond(
+                  f"- {xmarkEmoji} **I don't have permission to move members.**"
+              )
+          except discord.HTTPException as e:
+              return await ctx.respond(f"- {xmarkEmoji} **Failed to move the user: {e}**")
+  
+
+      try:
+          await user.move_to(user_channel)
+      except discord.Forbidden:
+          return await ctx.respond(
+              f"- {xmarkEmoji} **I don't have permission to move the user back to their channel.**"
+          )
+      except discord.HTTPException as e:
+          return await ctx.respond(f"- {xmarkEmoji} **Failed to move the user back: {e}**")
+      
+      await ctx.respond(f"- **{tickEmoji} Dragged {user.display_name} through hell and brought them back! 😈**")
 
 
 

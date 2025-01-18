@@ -391,6 +391,8 @@ fishingCatchables = [
 ]
 
 def GetDiscount(percentage,value):
+    if percentage == 0:
+         return value
     discount_amount = (percentage / 100) * value
     final_value = value - discount_amount
     return math.floor(final_value)
