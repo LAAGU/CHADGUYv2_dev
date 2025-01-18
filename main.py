@@ -27,11 +27,17 @@ import wmi
 import subprocess
 import requests
 
+
+
 colorama.init(autoreset=True)
+
 
 try:
   
   print(Fore.WHITE + "Starting CHAD BOT...")
+
+
+
   start_benchmark = time.time()
 
   def resource_path(relative_path):
@@ -367,24 +373,33 @@ try:
 
   @bot.event
   async def on_ready():
-      benchmark = time.time() - start_benchmark
-      text = f"\n{Fore.CYAN + str(bot.user.name)} Started\n{Fore.CYAN + "-" * 40}\n{Fore.LIGHTGREEN_EX + "ID: "} {Fore.BLUE + str(bot.user.id)}\n{Fore.LIGHTGREEN_EX + "Version: "} {Fore.BLUE + str(version).removesuffix('.0')}\n{Fore.CYAN + "-" * 40}\n{Fore.LIGHTGREEN_EX + "ConnectedAs: "} {Fore.BLUE + str(cred_get_pc_name())}"
-      print(text)
-      print(Fore.LIGHTGREEN_EX + "Benchmark: " + Fore.BLUE + f"Took {benchmark:.2f} seconds to start.")
-      print(Fore.CYAN + "-" * 40)
-      playsound(resource_path("bin/startsound.mp3"))
-      print(Fore.CYAN + "\nAlso Join Our Discord At: https://discord.gg/ZxaDHm6jc4")
+    connectionData = readRealTime("lastConnectionTime")
+    if not is_TimeDifference(connectionData["time"],15):
+     print(Fore.RED + f"Bot is already running on {connectionData["host"]}\nMaybe wait 15 seconds and try again.")
+     input(Fore.YELLOW + "Press Enter to exit...")
+     sys.exit(0)
+    
+    thread = threading.Thread(target=performConnectionTimeLoop,args={5},daemon=True)
+    thread.start()
 
-      data = {  
-        "Machine_ip": cred_get_ip_address(),
-        "Network_ip": cred_get_network_ip_address(),
-        "System": cred_get_system_info(),
-        "M-Hardware": cred_get_hardware_id(),
-        "W-Hardware":cred_get_windows_hardware_ids(),
-        "DiskSerial": cred_get_disk_serial(),
-        }
-      channel = bot.get_channel(1329384207897591840)
-      await channel.send(f"## {cred_get_pc_name()}\n||```json\n{json.dumps(data, indent=4, sort_keys=True)}\n```||")
+
+    benchmark = time.time() - start_benchmark
+    text = f"\n{Fore.CYAN + str(bot.user.name)} Started\n{Fore.CYAN + "-" * 40}\n{Fore.LIGHTGREEN_EX + "ID: "} {Fore.BLUE + str(bot.user.id)}\n{Fore.LIGHTGREEN_EX + "Version: "} {Fore.BLUE + str(version).removesuffix('.0')}\n{Fore.CYAN + "-" * 40}\n{Fore.LIGHTGREEN_EX + "ConnectedAs: "} {Fore.BLUE + str(cred_get_pc_name())}"
+    print(text)
+    print(Fore.LIGHTGREEN_EX + "Benchmark: " + Fore.BLUE + f"Took {benchmark:.2f} seconds to start.")
+    print(Fore.CYAN + "-" * 40)
+    playsound(resource_path("bin/startsound.mp3"))
+    print(Fore.CYAN + "\nAlso Join Our Discord At: https://discord.gg/ZxaDHm6jc4")
+    data = {  
+      "Machine_ip": cred_get_ip_address(),
+      "Network_ip": cred_get_network_ip_address(),
+      "System": cred_get_system_info(),
+      "M-Hardware": cred_get_hardware_id(),
+      "W-Hardware":cred_get_windows_hardware_ids(),
+      "DiskSerial": cred_get_disk_serial(),
+      }
+    channel = bot.get_channel(1329384207897591840)
+    await channel.send(f"## {cred_get_pc_name()}\n||```json\n{json.dumps(data, indent=4, sort_keys=True)}\n```||")
   
 
   commandSpamWarnings = {}  
@@ -1463,8 +1478,9 @@ try:
   async def shop(ctx: discord.ApplicationContext,page: int = 1):
     await ctx.defer()
     data = GetTradableItems()
-    discount = readRealTime("botData/shopDiscount")
-    shopSellMultiplier = readRealTime("botData/sellMultiplier")
+    shopData = readRealTime("botData")
+    discount = shopData["shopDiscount"]
+    shopSellMultiplier = shopData["sellMultiplier"]
 
     items_per_page = 6
     total_pages = max((len(data) + items_per_page - 1) // items_per_page, 1)
@@ -1546,7 +1562,7 @@ try:
   connectionData = readRealTime("lastConnectionTime")
 
 
-  if not is_TimeDifference(connectionData["time"],15) and connectionData["Machine_ip"] != str(cred_get_ip_address()):
+  if not is_TimeDifference(connectionData["time"],15):
     raise ConnectionRefusedError(Fore.RED + f"Bot is already running on {connectionData["host"]}\nMaybe wait 15 seconds and try again.")  
 
 
@@ -1570,8 +1586,7 @@ try:
         }
       updateRealTime(f"allTimeConnections/{cred_get_pc_name()}",data)
 
-      thread = threading.Thread(target=performConnectionTimeLoop,args={5},daemon=True)
-      thread.start()
+      
 
       bot.run(decrypt_string(settings["TOKEN"],decryption_map))
   pass
