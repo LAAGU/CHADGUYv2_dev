@@ -1,5 +1,6 @@
 import string
 import random
+import math
 
 
 agentArray : list[dict] = [
@@ -389,6 +390,12 @@ fishingCatchables = [
         {"id":"orange_bass","max":2,"probibility":10},
 ]
 
+def GetDiscount(percentage,value):
+    discount_amount = (percentage / 100) * value
+    final_value = value - discount_amount
+    return math.floor(final_value)
+     
+
 def GetFishingCatchables() -> list[dict]:
     return fishingCatchables
 
@@ -423,6 +430,13 @@ def GetItem(id : str) -> dict:
 
 def GetItems() -> dict:
     return items
+
+def GetTradableItems() -> dict:
+    data = {}
+    for item in items:
+        if items[item]["price"] != -1:
+            data[item] = items[item]
+    return data
 
 def GetAgent(index : int) -> dict:
     return agentArray[index]

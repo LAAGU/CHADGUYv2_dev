@@ -496,7 +496,7 @@ try:
           return    
   
   @bot.event
-  async def on_application_command_error(ctx,error):
+  async def on_application_command_error(ctx,error : discord.SlashCommand):
       doubleStartUpErrorList = ["Application Command raised an exception: NotFound: 404 Not Found (error code: 10062): Unknown interaction","Application Command raised an exception: HTTPException: 400 Bad Request (error code: 40060): Interaction has already been acknowledged."] 
       if isinstance(error,commands.CommandOnCooldown):
           return await ctx.respond(f"- **{xmarkEmoji} {error}**",ephemeral=True,delete_after=2)
@@ -504,6 +504,7 @@ try:
          print(Fore.RED + f"An error occurred: {str(error)}" + Fore.YELLOW + "\nThe issue might be a network issue from your side or discord's side at rare cases it can be an error from this application but this error can be ignored if it dosn't occur frequently.")    
          return     
       else:
+          await ctx.respond(f"- **{xmarkEmoji} There was an Error :**\n```python\n{error}\n```",ephemeral=True)
           raise error
           
   
@@ -956,6 +957,26 @@ try:
       if request["status"] == "success":
           return await ctx.respond(f"- {tickEmoji} **{request['message']}**")
 
+  @bot.slash_command(guild_ids=servers, name='giveitem', description='To give someone your item.')
+  @commands.cooldown(commandRateLimit, commandCoolDown * 4, commands.BucketType.user)
+  @hasAccount()
+  @captcha()
+  async def giveitem(ctx: discord.ApplicationContext,user: discord.User,item_id:Annotated[str,Option(str, "Choose an item", autocomplete=autocomplete_modify_inventory)],amount:int):
+    try:
+        userInv = rdb("accounts", str(user.id))["inventory"]
+    except:
+        return await ctx.followup.send(f"- {xmarkEmoji} **User does not have an account.**",ephemeral=True)     
+    
+    senderInv = rdb("accounts", str(ctx.author.id))["inventory"]
+    if item_id not in [item["id"] for item in senderInv]:
+        return await ctx.followup.send(f"- {xmarkEmoji} **You don't have this item in your inventory.**",ephemeral=True)
+    
+    if amount > [item["amount"] for item in senderInv if item["id"] == item_id][0]:
+        return await ctx.followup.send(f"- {xmarkEmoji} **You don't have enough of this item in your inventory.**",ephemeral=True)
+
+    updateInventory(str(ctx.author.id),item_id,-amount)    
+    updateInventory(str(user.id),item_id,amount)
+    return await ctx.followup.send(f"- {tickEmoji} **You gave {user.display_name} `x{amount}`{GetItems()[item_id]['name']}**",ephemeral=True)
 
   @bot.slash_command(guild_ids=servers, name='set_topic', description='Set current channel topic.')
   @commands.cooldown(commandRateLimit, commandCoolDown, commands.BucketType.user)
@@ -1437,7 +1458,87 @@ try:
     await ctx.followup.send(embed=embed,file=file,ephemeral=False)
 
 
-   
+  @bot.slash_command(guild_ids=servers, name='shop', description='To check item prices.')
+  @commands.cooldown(commandRateLimit, commandCoolDown * 2 , commands.BucketType.user)
+  async def shop(ctx: discord.ApplicationContext,page: int = 1):
+    await ctx.defer()
+    data = GetTradableItems()
+    discount = readRealTime("botData/shopDiscount")
+    shopSellMultiplier = readRealTime("botData/sellMultiplier")
+
+    items_per_page = 6
+    total_pages = max((len(data) + items_per_page - 1) // items_per_page, 1)
+    page = max(1, min(page, total_pages)) - 1
+
+    def create_embed(current_page: int) -> discord.Embed:
+        start = current_page * items_per_page
+        end = start + items_per_page
+        page_items = list(data.values())[start:end]
+    
+        embed = discord.Embed(
+            title=f"Here Is What Shop Offers You - Page {current_page + 1}/{total_pages}",
+            color=discord.Color.dark_gold()
+        )
+        if discount > 0:
+            embed.description = f"## - {discount}% Off Every Item In The Shop!\n### - Selling Price Multiplier: `{shopSellMultiplier}x`"
+        if len(page_items) == 0:
+            embed.description = "## - Shop Empty!" 
+        index = 1
+        for i, (item_id, item) in enumerate(zip(list(data.keys())[start:end], page_items), start=1):
+            if discount > 0:
+                embed.add_field(
+                    name=f"{item['emoji']} {item['name']}",
+                    value=f"- **Buy -** ~~`${'{:,}'.format(item['price'])}`~~ ```${'{:,}'.format(GetDiscount(discount, item['price']))}```\n"
+                          f"- **Sell -** `({shopSellMultiplier}x)` ```${'{:,}'.format(int(item['price'] * shopSellMultiplier) )}```",
+                    inline=True
+                )
+            else:
+                embed.add_field(
+                    name=f"{item['emoji']} {item['name']}",
+                    value=f"- **Buy -** ```${'{:,}'.format(item['price'])}```\n"
+                          f"- **Sell -** `({shopSellMultiplier}x)` ```${'{:,}'.format(int(item['price'] * shopSellMultiplier))}```",
+                    inline=True
+                )
+            # if i % 2 == 0:
+            #     embed.add_field(name="\u200b", value="\u200b", inline=False)
+        
+            index += 1
+        return embed
+
+    current_page = page
+    embed = create_embed(current_page)
+
+    class PaginationView(View):
+        def __init__(self):
+            super().__init__(timeout=60)
+            self.update_buttons()
+
+        @discord.ui.button(label="", emoji="<:leftarrow:1327716449510494339>", style=discord.ButtonStyle.primary)
+        async def previous_button(self, button: Button, interaction: discord.Interaction):
+            if interaction.user.id != ctx.author.id:
+                return
+            nonlocal current_page
+            current_page = max(0, current_page - 1)
+            embed = create_embed(current_page)
+            self.update_buttons()
+            await interaction.response.edit_message(embed=embed, view=self)
+
+        @discord.ui.button(label="", emoji="<:rightarrow:1327716447467733043>", style=discord.ButtonStyle.primary)
+        async def next_button(self, button: Button, interaction: discord.Interaction):
+            if interaction.user.id != ctx.author.id:
+                return
+            nonlocal current_page
+            current_page = min(total_pages - 1, current_page + 1)
+            embed = create_embed(current_page)
+            self.update_buttons()
+            await interaction.response.edit_message(embed=embed, view=self)
+
+        def update_buttons(self):
+            self.previous_button.disabled = current_page <= 0
+            self.next_button.disabled = current_page >= total_pages - 1
+
+    view = PaginationView()
+    await ctx.respond(embed=embed, view=view)
 
 
 
