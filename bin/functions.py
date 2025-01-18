@@ -3,6 +3,25 @@ import random
 import math
 
 
+def MergeDictArray(given_list, main_list):
+    main_dict = {item['id']: item for item in main_list}
+
+    for item in given_list:
+        item_id = item['id']
+        item_amount = item['amount']
+
+        if item_id in main_dict:
+            main_dict[item_id]['amount'] += item_amount
+
+            if main_dict[item_id]['amount'] <= 0:
+                del main_dict[item_id]
+        else:
+            if item_amount > 0:
+                main_dict[item_id] = {'id': item_id, 'amount': item_amount}
+
+    return list(main_dict.values())
+
+
 agentArray : list[dict] = [
         {
             "name": "BRIMSTONE",
@@ -438,7 +457,9 @@ def GetTradableItems() -> dict:
     for item in items:
         if items[item]["price"] != -1:
             data[item] = items[item]
+
     return data
+
 
 def GetAgent(index : int) -> dict:
     return agentArray[index]

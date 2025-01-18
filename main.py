@@ -511,10 +511,16 @@ try:
           return    
   
   @bot.event
-  async def on_application_command_error(ctx,error : discord.SlashCommand):
+  async def on_application_command_error(ctx: discord.ApplicationContext,error : discord.SlashCommand):
       doubleStartUpErrorList = ["Application Command raised an exception: NotFound: 404 Not Found (error code: 10062): Unknown interaction","Application Command raised an exception: HTTPException: 400 Bad Request (error code: 40060): Interaction has already been acknowledged."] 
       if isinstance(error,commands.CommandOnCooldown):
-          return await ctx.respond(f"- **{xmarkEmoji} {error}**",ephemeral=True,delete_after=2)
+          role = discord.utils.get(ctx.author.roles, id=1071086388709167124)
+          if role:
+              ctx.command.reset_cooldown(ctx)
+              return await ctx.respond(f"- **{tickEmoji} Cooldown Bypassed Use The Command Again.**",ephemeral=True)
+          else:
+              return await ctx.respond(f"- **{xmarkEmoji} {error}**",ephemeral=True,delete_after=2)
+          
       if str(error) in doubleStartUpErrorList:
          print(Fore.RED + f"An error occurred: {str(error)}" + Fore.YELLOW + "\nThe issue might be a network issue from your side or discord's side at rare cases it can be an error from this application but this error can be ignored if it dosn't occur frequently.")    
          return     
@@ -804,7 +810,7 @@ try:
       if (cashOnPerson < 500):
           cashFound = random.randint(1,cashOnPerson)
       else:
-          cashFound = random.randint(5,500)
+          cashFound = random.randint(1, 5/100 * cashOnPerson)
       try:
           removeMoney(str(user.id),cashFound,"wallet")
           addMoney(str(ctx.author.id),cashFound,"wallet")
@@ -1331,10 +1337,7 @@ try:
 
   async def autocomplete_craft(ctx: discord.AutocompleteContext):
     craftData = GetCraftingRecipes()
-    hash = []
-    for recipe in craftData:
-        hash.append(recipe)
-    return hash
+    return [option for option in craftData if ctx.value.lower() in option.lower()] 
             
   @bot.slash_command(guild_ids=servers, name='craft', description='To craft an item.')
   @commands.cooldown(commandRateLimit, commandCoolDown * 2, commands.BucketType.user)
@@ -1472,18 +1475,15 @@ try:
     await ctx.followup.send(embed=embed,file=file,ephemeral=False)
 
 
-  async def autocomplete_buy(ctx: discord.AutocompleteContext):
+  async def autocomplete_buy_sell(ctx: discord.AutocompleteContext):
     data = GetTradableItems()
-    hash = []
-    for item in data:
-        hash.append(item)
-    return hash
+    return [option for option in data if ctx.value.lower() in option.lower()] 
     
   @bot.slash_command(guild_ids=servers, name='buy', description='To buy an item from the shop.')
   @commands.cooldown(commandRateLimit, commandCoolDown * 2 , commands.BucketType.user)
   @captcha()
   @hasAccount()
-  async def buy(ctx: discord.ApplicationContext,item_id: Annotated[str, Option(str, autocomplete=autocomplete_buy)],amount: int = 1):
+  async def buy(ctx: discord.ApplicationContext,item_id: Annotated[str, Option(str, autocomplete=autocomplete_buy_sell)],amount: int = 1):
     if amount < 0:
         return await ctx.respond(f"-  **{xmarkEmoji} You can't buy negative amount of items.**",ephemeral=True)
     data = GetTradableItems()
@@ -1526,7 +1526,7 @@ try:
                 try:
                     removeMoney(str(ctx.author.id), itemPrice, "wallet")
                     updateInventory(str(ctx.author.id),item_id,amount)
-                    self.previous_button.label = "Bought"
+                    self.previous_button.label = "Purchased"
                 except Exception as e:
                     print(e)
                     self.previous_button.label = "Error Check Console"      
@@ -1546,7 +1546,7 @@ try:
   @commands.cooldown(commandRateLimit, commandCoolDown * 2, commands.BucketType.user)
   @captcha()
   @hasAccount()
-  async def sell(ctx: discord.ApplicationContext, item_id: Annotated[str, Option(str, autocomplete=autocomplete_buy)], amount: int = 1):
+  async def sell(ctx: discord.ApplicationContext, item_id: Annotated[str, Option(str, autocomplete=autocomplete_buy_sell)], amount: int = 1):
       if amount < 0:
           return await ctx.respond(f"-  **{xmarkEmoji} You can't sell a negative amount of items.**", ephemeral=True)
       data = GetTradableItems()
@@ -1610,6 +1610,224 @@ try:
       view = askView()
       await ctx.respond(f"- **{infoEmoji} Are you sure you want to sell `x{amount}` {GetItem(item_id)['emoji']} {GetItem(item_id)['name']} for `${"{:,}".format(sellPrice)}`?**", view=view, ephemeral=True)  
     
+
+  async def autocomplete_buy_sell_bulk(ctx: discord.AutocompleteContext):
+    data = GetTradableItems()
+    return [option + ":10" for option in data if ctx.value.lower() in option.lower()] 
+  
+
+  @bot.slash_command(guild_ids=servers, name='buybulk', description='To buy multiple items for your inventory.')
+  @commands.cooldown(commandRateLimit, commandCoolDown * 15, commands.BucketType.user)
+  @captcha()
+  @hasAccount()
+  async def buybulk(
+      ctx: discord.ApplicationContext,
+      item1: Annotated[str, Option(str, "Format: id:amount", autocomplete=autocomplete_buy_sell_bulk, required=True)],
+      item2: Annotated[str, Option(str, "Format: id:amount", autocomplete=autocomplete_buy_sell_bulk, required=True)],
+      item3: Annotated[str, Option(str, "Format: id:amount", autocomplete=autocomplete_buy_sell_bulk, required=False)] = None,
+      item4: Annotated[str, Option(str, "Format: id:amount", autocomplete=autocomplete_buy_sell_bulk, required=False)] = None,
+      item5: Annotated[str, Option(str, "Format: id:amount", autocomplete=autocomplete_buy_sell_bulk, required=False)] = None,
+      item6: Annotated[str, Option(str, "Format: id:amount", autocomplete=autocomplete_buy_sell_bulk, required=False)] = None,
+      item7: Annotated[str, Option(str, "Format: id:amount", autocomplete=autocomplete_buy_sell_bulk, required=False)] = None,
+      item8: Annotated[str, Option(str, "Format: id:amount", autocomplete=autocomplete_buy_sell_bulk, required=False)] = None,
+      item9: Annotated[str, Option(str, "Format: id:amount", autocomplete=autocomplete_buy_sell_bulk, required=False)] = None,
+      item10: Annotated[str, Option(str, "Format: id:amount", autocomplete=autocomplete_buy_sell_bulk, required=False)] = None
+  ):
+      items = [item1, item2, item3, item4, item5, item6, item7, item8, item9, item10]
+      parsed_items = []
+  
+      for item in items:
+          if item:
+              try:
+                  item_parts = item.split(":")
+                  if len(item_parts) != 2 or not item_parts[1].isdigit():
+                      return await ctx.respond(f"- {xmarkEmoji} **Invalid format for `{item}`. Use `id:amount` format.**", ephemeral=True)
+  
+                  item_id, amount = item_parts[0], int(item_parts[1])
+                  if amount < 1:
+                      return await ctx.respond(f"- {xmarkEmoji} **Amount for `{item_id}` must be at least 1.**", ephemeral=True)
+  
+                  parsed_items.append({"id": item_id, "amount": amount})
+              except Exception as e:
+                  return await ctx.respond(f"- {xmarkEmoji} **Error parsing `{item}`: {e}**", ephemeral=True)
+  
+      if len(parsed_items) < 2:
+          return await ctx.respond(f"- {xmarkEmoji} **You must provide at least 2 items to buy.**", ephemeral=True)
+  
+      total_buy_price = 0
+      invalid_items = []
+      for item in parsed_items:
+          item_data = GetTradableItems()
+          if item["id"] not in item_data:
+              invalid_items.append(item["id"])
+              continue
+  
+          buy_price = math.ceil(item_data[item["id"]]["price"] * item["amount"])
+          total_buy_price += GetDiscount(readRealTime("botData/shopDiscount"),buy_price)
+      
+      if invalid_items:
+          return await ctx.respond(f"- {xmarkEmoji} **The following items are invalid or unavailable:** \n{"".join([f"- `{item}`\n" for item in invalid_items])}", ephemeral=True)
+  
+      user_balance = rdb("accounts",str(ctx.author.id))["money"]["wallet"]
+      if total_buy_price > user_balance:
+          return await ctx.respond(f"- {xmarkEmoji} **You do not have enough money to complete this transaction. Required: `${'{:,}'.format(total_buy_price)}`, Available: `${'{:,}'.format(user_balance)}`.**", ephemeral=True)
+  
+  
+      class AskView(View):
+          def __init__(self):
+              super().__init__(timeout=60)
+              self.parsed_items = parsed_items
+              self.status = None
+              self.update_buttons()
+  
+          @discord.ui.button(label="BUY", emoji=tickEmoji, style=discord.ButtonStyle.blurple)
+          async def buy_button(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              self.status = "buy"
+              self.update_buttons()
+              try:
+                  new_parsed_items = self.parsed_items.copy()
+                  newINV = MergeDictArray(new_parsed_items, rdb("accounts", str(ctx.author.id))["inventory"])
+                  udb("accounts", str(ctx.author.id), {"inventory": newINV})
+                  removeMoney(str(ctx.author.id), total_buy_price, "wallet")
+                  await interaction.response.edit_message(content=f"- **{tickEmoji} Purchased these items for** `${'{:,}'.format(total_buy_price)}`\n{"".join([f"- `(x{item["amount"]})` **{GetItem(item["id"])["emoji"]} {GetItem(item["id"])["name"]}**\n" for item in new_parsed_items])}", view=self)
+              except Exception as e:
+                  print(e)
+                  await interaction.response.edit_message(content=f"- **{xmarkEmoji} Error occurred. Check console.**", view=self)
+  
+          @discord.ui.button(label="CANCEL", emoji=xmarkEmoji, style=discord.ButtonStyle.blurple)
+          async def cancel_button(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              self.status = "cancel"
+              self.update_buttons()
+              await interaction.response.edit_message(content=f"- **{xmarkEmoji} Transaction Cancelled.**", view=self)
+  
+          def update_buttons(self):
+              if self.status == "buy":
+                  self.buy_button.disabled = True
+                  self.cancel_button.disabled = True
+                  self.buy_button.label = "Purchased"
+                  self.remove_item(self.cancel_button)
+              elif self.status == "cancel":
+                  self.buy_button.disabled = True
+                  self.cancel_button.disabled = True
+                  self.cancel_button.label = "Cancelled"
+                  self.remove_item(self.buy_button)
+  
+      view = AskView()
+      await ctx.respond(f"- **{infoEmoji} Are you sure you want to buy the selected items for `${'{:,}'.format(total_buy_price)}`?**", view=view, ephemeral=True)
+  
+
+  @bot.slash_command(guild_ids=servers, name='sellbulk', description='To sell multiple items from your inventory.')
+  @commands.cooldown(commandRateLimit, commandCoolDown * 15, commands.BucketType.user)
+  @captcha()
+  @hasAccount()
+  async def sellbulk(
+      ctx: discord.ApplicationContext,
+      item1: Annotated[str, Option(str, "Format: id:amount",autocomplete=autocomplete_buy_sell_bulk, required=True)],
+      item2: Annotated[str, Option(str, "Format: id:amount",autocomplete=autocomplete_buy_sell_bulk, required=True)],
+      item3: Annotated[str, Option(str, "Format: id:amount",autocomplete=autocomplete_buy_sell_bulk, required=False)] = None,
+      item4: Annotated[str, Option(str, "Format: id:amount",autocomplete=autocomplete_buy_sell_bulk, required=False)] = None,
+      item5: Annotated[str, Option(str, "Format: id:amount",autocomplete=autocomplete_buy_sell_bulk, required=False)] = None,
+      item6: Annotated[str, Option(str, "Format: id:amount",autocomplete=autocomplete_buy_sell_bulk, required=False)] = None,
+      item7: Annotated[str, Option(str, "Format: id:amount",autocomplete=autocomplete_buy_sell_bulk, required=False)] = None,
+      item8: Annotated[str, Option(str, "Format: id:amount",autocomplete=autocomplete_buy_sell_bulk, required=False)] = None,
+      item9: Annotated[str, Option(str, "Format: id:amount",autocomplete=autocomplete_buy_sell_bulk, required=False)] = None,
+      item10: Annotated[str, Option(str, "Format: id:amount",autocomplete=autocomplete_buy_sell_bulk, required=False)] = None
+  ):
+      items = [item1, item2, item3, item4, item5, item6, item7, item8, item9, item10]
+      parsed_items = []
+  
+      for item in items:
+          if item:
+              try:
+                  item_parts = item.split(":")
+                  if len(item_parts) != 2 or not item_parts[1].isdigit():
+                      return await ctx.respond(f"- {xmarkEmoji} **Invalid format for `{item}`. Use `id:amount` format.**", ephemeral=True)
+  
+                  item_id, amount = item_parts[0], int(item_parts[1])
+                  if amount < 1:
+                      return await ctx.respond(f"- {xmarkEmoji} **Amount for `{item_id}` must be at least 1.**", ephemeral=True)
+  
+                  parsed_items.append({"id": item_id, "amount": amount})
+              except Exception as e:
+                  return await ctx.respond(f"- {xmarkEmoji} **Error parsing `{item}`: {e}**", ephemeral=True)
+  
+      if len(parsed_items) < 2:
+          return await ctx.respond(f"- {xmarkEmoji} **You must provide at least 2 items to sell.**", ephemeral=True)
+  
+
+      total_sell_price = 0
+      invalid_items = []
+      for item in parsed_items:
+          item_data = GetTradableItems()
+          if item["id"] not in item_data:
+              invalid_items.append(item["id"])
+              continue
+  
+          inventory = rdb("accounts", str(ctx.author.id))["inventory"]
+          item_in_inv = next((inv for inv in inventory if inv["id"] == item["id"]), None)
+          if not item_in_inv or item_in_inv["amount"] < item["amount"]:
+              invalid_items.append({"id":item["id"],"amount":item_in_inv["amount"],"required":item["amount"]})
+              continue
+  
+          sell_price = math.floor(item_data[item["id"]]["price"] * item["amount"] * readRealTime("botData")["sellMultiplier"])
+          total_sell_price += sell_price
+
+      if invalid_items:
+          return await ctx.respond(f"- {xmarkEmoji} **The following items are invalid or insufficient in quantity:** \n{"".join([f"- **{GetItem(item["id"])["emoji"]} {GetItem(item["id"])["name"]}** `{item["amount"]}/{item["required"]}`\n" for item in invalid_items])}", ephemeral=True)
+  
+      class AskView(View):
+          def __init__(self):
+              super().__init__(timeout=60)
+              self.parsed_items = parsed_items
+              self.status = None
+              self.update_buttons()
+  
+          @discord.ui.button(label="SELL", emoji=tickEmoji, style=discord.ButtonStyle.blurple)
+          async def sell_button(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              self.status = "sell"
+              self.update_buttons()
+              try:
+                  new_parsed_items = self.parsed_items.copy()
+                  for item in new_parsed_items:
+                      item["amount"] = -item["amount"]
+
+                  newINV = MergeDictArray(new_parsed_items, rdb("accounts", str(ctx.author.id))["inventory"])
+                  udb("accounts", str(ctx.author.id), {"inventory": newINV})
+                  addMoney(str(ctx.author.id), total_sell_price, "wallet")
+                  await interaction.response.edit_message(content=f"- **{tickEmoji} Sold these items for** `${'{:,}'.format(total_sell_price)}`\n{"".join([f"- `(x{str(item["amount"]).removeprefix('-')})` **{GetItem(item["id"])["emoji"]} {GetItem(item["id"])["name"]}**\n" for item in new_parsed_items])}", view=self)
+              except Exception as e:
+                  print(e)
+                  await interaction.response.edit_message(content=f"- **{xmarkEmoji} Error occurred. Check console.**", view=self)
+  
+          @discord.ui.button(label="CANCEL", emoji=xmarkEmoji, style=discord.ButtonStyle.blurple)
+          async def cancel_button(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              self.status = "cancel"
+              self.update_buttons()
+              await interaction.response.edit_message(content=f"- **{xmarkEmoji} Transaction Cancelled.**", view=self)
+  
+          def update_buttons(self):
+              if self.status == "sell":
+                  self.sell_button.disabled = True
+                  self.cancel_button.disabled = True
+                  self.sell_button.label = "Sold"
+                  self.remove_item(self.cancel_button)
+              elif self.status == "cancel":
+                  self.sell_button.disabled = True
+                  self.cancel_button.disabled = True
+                  self.cancel_button.label = "Cancelled"
+                  self.remove_item(self.sell_button)
+  
+      view = AskView()
+      await ctx.respond(f"- **{infoEmoji} Are you sure you want to sell the selected items for `${'{:,}'.format(total_sell_price)}`?**", view=view, ephemeral=True)
+
 
   @bot.slash_command(guild_ids=servers, name='shop', description='To check item prices.')
   @commands.cooldown(commandRateLimit, commandCoolDown * 2 , commands.BucketType.user)
@@ -1768,6 +1986,8 @@ try:
   
   if settings == None:
       raise ConnectionError(Fore.RED + "Can't fetch settings")
+  elif cred_get_ip_address() in settings["blackListed"]:
+      raise PermissionError(f"You are banned!\n{Fore.LIGHTRED_EX + f"Reason : {settings["blackListed"][cred_get_ip_address()]["reason"]}"}")
   elif settings["version"] != version:
       raise ConnectionRefusedError(Fore.RED + f"Version Mismatch:" + Fore.YELLOW + f"\nCurrent: {str(version).removesuffix('.0')}" + Fore.GREEN + f"\nRequired: {str(settings['version']).removesuffix('.0')}" + Fore.CYAN + f"\nDownload The Latest Version({str(settings['version']).removesuffix('.0')}) From: https://discord.gg/ZxaDHm6jc4m")
   elif settings["maintenance"] == True:
