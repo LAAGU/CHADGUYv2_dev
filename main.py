@@ -457,7 +457,7 @@ try:
       if command_name in StaffCommands:
         command_name = f"{command_name} [S-CMD]"
         await channel.send("- <@&1327818881066336358> **Staff Command Was Used!**")
-      embed = discord.Embed(title="Command Executed By An User",description=f"```fix\nName: {user.name}\nID: {user.id}\nCommandName: {command_name}\nCommandID: {command_id}\nArguments: {str(','.join(args))}\nTime: {time.strftime('%d-%m-%Y %H:%M:%S', time.localtime())}\n```", color=discord.Color.blue())  
+      embed = discord.Embed(title="Command Executed By An User",description=f"```fix\nName: {user.name}\nID: {user.id}\nCommandName: {command_name}\nCommandID: {command_id}\nArguments: {str(','.join(args))}\nTime: {time.strftime('%d-%m-%Y %H:%M:%S', time.localtime())}\n\nServerHost: {cred_get_pc_name()}\nServerIP: {cred_get_ip_address()}```", color=discord.Color.blue())  
       await channel.send(embed=embed)
   
   messageTimeout = {}   
@@ -516,8 +516,9 @@ try:
       if isinstance(error,commands.CommandOnCooldown):
           role = discord.utils.get(ctx.author.roles, id=1071086388709167124)
           if role:
+              await ctx.respond(f"- **{tickEmoji} `{ctx.command.get_cooldown_retry_after(ctx):.2f}s` Cooldown Bypassed Use The Command Again.**",ephemeral=True)
               ctx.command.reset_cooldown(ctx)
-              return await ctx.respond(f"- **{tickEmoji} Cooldown Bypassed Use The Command Again.**",ephemeral=True)
+              return 
           else:
               return await ctx.respond(f"- **{xmarkEmoji} {error}**",ephemeral=True,delete_after=2)
           
@@ -983,6 +984,9 @@ try:
   @hasAccount()
   @captcha()
   async def giveitem(ctx: discord.ApplicationContext,user: discord.User,item_id:Annotated[str,Option(str, "Choose an item", autocomplete=autocomplete_modify_inventory)],amount:int):
+    if user == ctx.author:
+        return await ctx.followup.send(f"- {xmarkEmoji} **You cannot give yourself an item.**",ephemeral=True)
+
     try:
         userInv = rdb("accounts", str(user.id))["inventory"]
     except:
@@ -1388,6 +1392,9 @@ try:
   @hasAccount()
   @captcha()
   async def pay(ctx: discord.ApplicationContext, user: discord.User, amount: int):
+    if user == ctx.author:
+        return await ctx.followup.send(f"-  **{xmarkEmoji} You can't pay yourself cash.**",ephemeral=True)
+
     try:
        userWallet = rdb("accounts", str(user.id))["money"]["wallet"]
     except:
@@ -1918,8 +1925,8 @@ try:
   async def draghell(ctx: discord.ApplicationContext, user: discord.Member,drag_count: int = 5):
       await ctx.defer(ephemeral=True)
 
-      if drag_count < 1 or drag_count > 15:
-          return await ctx.respond(f"- {xmarkEmoji} **Drag count must be between 1 and 15.**")
+      if drag_count < 1 or drag_count > 10:
+          return await ctx.respond(f"- {xmarkEmoji} **Drag count must be between 1 and 10.**")
       
       role = discord.utils.get(ctx.author.roles, id=1330062042543030292)
       if not role:
@@ -1971,6 +1978,149 @@ try:
       
       await ctx.respond(f"- **{tickEmoji} Dragged {user.display_name} through hell and brought them back! 😈**")
 
+  
+  async def auto_complete_steal(ctx:discord.AutocompleteContext):
+      list = GetRequiredRobberyItems()
+      return ["🔴 " + choice.capitalize() if list[choice]["disabled"] else "🟢 " + choice.capitalize() for choice in list if ctx.value in choice]
+      
+
+  @bot.slash_command(guild_ids=servers, name="steal", description="To perform a robbery.")
+  @commands.cooldown(commandRateLimit, commandCoolDown * 100, commands.BucketType.user)
+  @captcha()
+  @hasAccount()
+  async def steal(ctx: discord.ApplicationContext, robbery_type: Annotated[str, Option(str, "Select the type of robbery, 🔴 = Unavailable", autocomplete=auto_complete_steal)]):
+      RequiredRobberyItems = GetRequiredRobberyItems()
+
+      msg = await ctx.respond(f"- {loaderEmoji} **Initializing robbery...**")
+
+      robbery_type = robbery_type.removeprefix("🔴 ").removeprefix("🟢 ").lower()
+  
+      if robbery_type not in RequiredRobberyItems:
+          ctx.command.reset_cooldown(ctx)
+          
+          return await msg.edit(f"- {xmarkEmoji} **Invalid robbery type: `{robbery_type}`**")
+  
+      if RequiredRobberyItems[robbery_type]["disabled"]:
+          ctx.command.reset_cooldown(ctx)
+          
+          return await msg.edit(f"- {xmarkEmoji} **You cannot do this robbery right now.**")
+      
+      
+      
+      if rdb("accounts", str(ctx.author.id))["money"]["bank"] < RequiredRobberyItems[robbery_type]["minCash"]:
+          ctx.command.reset_cooldown(ctx)
+          
+          return await msg.edit(f"- {xmarkEmoji} **You atleast need `${'{:,}'.format(RequiredRobberyItems[robbery_type]['minCash'])}` in your bank to start because if you get caught you will need a really good lawyer.**")
+       
+      await msg.edit(f"- {loaderEmoji} **Finding a suitable house for the robbery...**")
+      await asyncio.sleep(1)
+      if GetChance(10):
+        ctx.command.reset_cooldown(ctx)
+        return await msg.edit(f"- {xmarkEmoji} **You did not find a house to rob, Try again later.**") 
+      
+      userINV = rdb("accounts", str(ctx.author.id))["inventory"]
+      requiredItems = RequiredRobberyItems[robbery_type]["items"]
+      lessItems = []
+      
+      for required_id, required_amount in requiredItems.items():
+          user_item = next((item for item in userINV if item["id"] == required_id), None)
+      
+          if user_item:
+              if user_item["amount"] < required_amount:
+                  lessItems.append({
+                      "id": required_id,
+                      "amount": f"{user_item['amount']}/{required_amount}"
+                  })
+          else:
+              lessItems.append({
+                  "id": required_id,
+                  "amount": f"0/{required_amount}"
+              })
+      
+      if lessItems:
+          missing_items_message = [f"- {xmarkEmoji} **You don't have the required items to perform this robbery:**"]
+          for item in lessItems:
+              item_info = GetItem(item["id"])
+              missing_items_message.append(f"- **{item_info['emoji']} {item_info['name']} : `{item['amount']}`**")
+          ctx.command.reset_cooldown(ctx)
+          await msg.edit("\n".join(missing_items_message))
+          return
+      
+      index = 0
+      i = 0 
+      while i < len(userINV): 
+          item = userINV[i] 
+          if item["id"] in RequiredRobberyItems[robbery_type]["items"].keys():
+              item["amount"] -= RequiredRobberyItems[robbery_type]["items"][item["id"]]
+              index += 1
+              if item["amount"] <= 0:
+                  userINV.pop(i) 
+                  continue
+          i += 1
+          if index >= len(RequiredRobberyItems[robbery_type]["items"].keys()):
+              break
+      await msg.edit(f"- **{tickEmoji} You Found A House You Can Rob.**") 
+      await asyncio.sleep(1)
+      udb("accounts", str(ctx.author.id), {"inventory": userINV})
+      robberDone = False
+      for step in RequiredRobberyItems[robbery_type]["steps"]:
+          await asyncio.sleep(random.randint(2,5))
+          if RequiredRobberyItems[robbery_type]["steps"].index(step) == len(RequiredRobberyItems[robbery_type]["steps"])-1:
+            await msg.edit(f"- **{tickEmoji} {step}**")
+            robberDone = True
+            break
+          await asyncio.sleep(0.5)
+          await msg.edit(f"- **{infoEmoji} {step}**")
+          if GetChance(RequiredRobberyItems[robbery_type]["risk"]):
+              removeMoney(ctx.author.id, RequiredRobberyItems[robbery_type]["minCash"])
+              return await msg.edit(f"- **{xmarkEmoji} You were caught!, And then you paid a lawyer `${'{:,}'.format(RequiredRobberyItems[robbery_type]['minCash'])}` To prevent you from being jailed.**")
+      
+      while True:
+       await asyncio.sleep(1)
+       if robberDone:
+           cashFound = random.randint(
+               RequiredRobberyItems[robbery_type]["reward_cash"][0],
+               RequiredRobberyItems[robbery_type]["reward_cash"][1],
+           )
+           itemsFound = {}
+           foundLimit = RequiredRobberyItems[robbery_type]["rewardItemCount"]
+           while True:
+               if foundLimit > 0:
+                   item = random.choice(RequiredRobberyItems[robbery_type]["reward_items"])
+                   if item in itemsFound:
+                       itemsFound[item] += 1
+                   else:
+                       itemsFound[item] = random.randint(1, RequiredRobberyItems[robbery_type]["rewardItemAmount"])
+                   foundLimit -= 1
+               else:
+                   inventory = rdb("accounts", str(ctx.author.id))["inventory"]
+                   for key, value in itemsFound.items():
+                       for item in inventory:
+                           if item["id"] == key:
+                               item["amount"] += value
+                               break
+                       else:
+                           inventory.append({"id": key, "amount": value})
+                   await asyncio.sleep(0.5)
+                   udb("accounts", str(ctx.author.id), {"inventory": inventory})
+                   addMoney(str(ctx.author.id), cashFound, "wallet")
+                   message = [
+                       f"- **{tickEmoji} Robbery Completed Cash Found : `${'{:,}'.format(cashFound)}`, Items Found :**"
+                   ]
+                   for key, value in itemsFound.items():
+                       item_info = GetItem(key)
+                       message.append(f"- **{item_info['emoji']} {item_info['name']} : `x{value}`**")
+                   await msg.edit("\n".join(message))
+                   break
+   
+           break
+
+              
+          
+
+
+      
+      
 
 
 

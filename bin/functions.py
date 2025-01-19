@@ -21,6 +21,11 @@ def MergeDictArray(given_list, main_list):
 
     return list(main_dict.values())
 
+def GetChance(percentage: float) -> bool:
+    if not 0 <= percentage <= 100:
+        raise ValueError("Percentage must be between 0 and 100 inclusive.")
+    return random.uniform(0, 100) < percentage
+
 
 agentArray : list[dict] = [
         {
@@ -185,6 +190,12 @@ itemClasses: dict = {
 }
 
 items: dict = {
+        "lockpick": {
+            "name": "Lockpick",
+            "emoji": "<:_lockpick:1330478321657581608>",
+            "price": -1,
+            "class": "gadget"
+        },
         "phone": {
             "name": "Phone",
             "emoji": "<:phone:1326689224749219982>",
@@ -219,7 +230,7 @@ items: dict = {
             "name": "Blue Gem",
             "emoji": "<a:_blue_gem:1329300836534321247>",
             "price": 2000,
-            "class": "scrap"
+            "class": "misc"
         },
         "fish_bait": {
             "name": "Fish Bait",
@@ -359,11 +370,82 @@ items: dict = {
             "price": 10,
             "class": "creature"
         },
+        "crowbar": {
+            "name": "Crowbar",
+            "emoji": "<:_crowbar:1330463820031987816>",
+            "price": 150,
+            "class": "utility"
+        },
+        "bag": {
+            "name": "Bag",
+            "emoji": "<:_bag:1330464434128420927>",
+            "price": 100,
+            "class": "utility"
+        },
+        "silver_chain": {
+            "name": "Silver Chain",
+            "emoji": "<:_silver_chain:1330534762879778819>",
+            "price": 2000,
+            "class": "misc"
+        },
+        "diamond_ring":{
+            "name": "Diamond Ring",
+            "emoji": "<:_diamond_ring:1330534222741508106>",
+            "price": 6000,
+            "class": "misc"
+        },
+        "ruby_ring":{
+            "name": "Ruby Ring",
+            "emoji": "<:_ruby_ring:1330534228336574474>",
+            "price": 3500,
+            "class": "misc"
+        },
+        "emerald_ring":{
+            "name": "Emerald Ring",
+            "emoji": "<:_emerald_ring:1330534225358880838>",
+            "price": 4500,
+            "class": "misc"
+        }
 
-
-
-        
 }
+
+
+requiredRobberyItems : dict = {
+    "house": {
+        "risk": 8,
+        "disabled":False,
+        "minCash":1000,
+        "steps":[
+            "Checking if someone is near the house...",
+            "Lockpicking the door...",
+            "Entered The House...",
+            "Finding valueable items and cash...",
+            "Using crowbar to open a safe...",
+            "Putting every thing in the bag...",
+            "Fleeing from the area...",
+            "House Robbed Successfully! Calculating Valuables..."
+        ],
+        "items": {
+            "lockpick":3,
+            "crowbar":1,
+            "bag":1
+        },
+        "reward_cash":[500,5000],
+        "reward_items":['phone','blue_gem','silver_chain','diamond_ring','ruby_ring','emerald_ring'],
+        "rewardItemCount":5,
+        "rewardItemAmount":2
+    },
+    "shop": {
+        "disabled":True
+    },
+    "atm": {
+        "disabled":True
+    },
+    "bank": {
+        "disabled":True
+    }
+}
+
 
 dailyRewards: list[dict] = [
     {
@@ -408,6 +490,9 @@ fishingCatchables = [
         {"id":"green_bass","max":3,"probibility":12},
         {"id":"orange_bass","max":2,"probibility":10},
 ]
+
+def GetRequiredRobberyItems() -> dict:
+    return requiredRobberyItems
 
 def GetDiscount(percentage,value):
     if percentage == 0:
