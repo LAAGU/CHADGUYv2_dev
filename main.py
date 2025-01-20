@@ -3,6 +3,7 @@ import time
 from discord import ui, Embed, Option
 from discord.ui import View,Button
 from discord.ext import commands
+from discord import PartialEmoji
 from typing import Annotated
 import datetime
 from datetime import date,timedelta
@@ -2120,10 +2121,76 @@ try:
    
            break
 
-              
-          
 
 
+  modalInputs = {
+    "id": ''
+  }
+
+  suggestionChannel = 1330944887625089106
+
+
+  class confirmView(View):
+        def __init__(self,interaction : discord.Interaction):
+             super().__init__(timeout=500)
+             self.inter = interaction
+ 
+        @discord.ui.button(label="Send", emoji=tickEmoji, style=discord.ButtonStyle.green,row=0)
+        async def send_button(self, button: Button, interaction: discord.Interaction):
+             button.disabled = True
+             button.label = "Sent!"
+             self.remove_item(self.edit_button) 
+             self.remove_item(self.cancel_button)
+             channel = bot.get_channel(suggestionChannel)
+             poll = discord.Poll(question=modalInputs[str(interaction.user.id)], duration=24 * 4)
+             poll.add_answer(text="Agree", emoji=PartialEmoji(name="tick2", id=1329251587524137020))
+             poll.add_answer(text="Disagree", emoji=PartialEmoji(name="xmark2", id=1329251589424283680))
+             poll.allow_multiselect = False
+             await bot.get_channel(commandLogsChannel).send(content=f"## New Suggestion Created By `{interaction.user.id}`",poll=poll)
+             await channel.send(content=f"**Suggestion From:** {interaction.user.mention}\n||<@&1076075894722023435>||",poll=poll)
+             await interaction.response.edit_message(content=f"{tickEmoji} **Suggestion Sent, Check <#{suggestionChannel}>**",view=self)
+ 
+        @discord.ui.button(label="Edit", emoji="<:_edit:1330979809542799472>", style=discord.ButtonStyle.blurple,row=0)
+        async def edit_button(self, button: Button, interaction: discord.Interaction):
+            await self.inter.delete_original_response()
+            await interaction.response.send_modal(suggestModal(interaction.user.id))
+
+        @discord.ui.button(label="Cancel", emoji=xmarkEmoji, style=discord.ButtonStyle.gray,row=2)
+        async def cancel_button(self, button: Button, interaction: discord.Interaction):
+             button.disabled = True
+             button.label = "Canceled!"
+             self.remove_item(self.edit_button)
+             self.remove_item(self.send_button)
+             await interaction.response.edit_message(content=f"{tickEmoji} **Suggestion Cancelled!**",view=self,embed=None) 
+
+  class suggestModal(ui.Modal):
+    def __init__(self,userId):
+        super().__init__(title="Create Suggestion",timeout = 500)
+
+        self.text = ui.InputText(
+            label="About your suggestion",
+            placeholder="I like to see ...",
+            required=True,
+            max_length=200,
+            style=discord.InputTextStyle.long,
+            min_length=20,
+            value=modalInputs.get(str(userId), "")
+        )
+        self.add_item(self.text)
+    
+
+
+    async def callback(self,interaction : discord.Interaction):
+        response = self.text.value
+        modalInputs[str(interaction.user.id)] = response
+        embed = discord.Embed(title="Suggestion Message Preview",description=f"{response}",color=discord.Color.yellow())
+        await interaction.response.send_message(embed=embed,view=confirmView(interaction),ephemeral=True)
+        
+  @bot.slash_command(guild_ids=servers, name="suggest", description="To create a suggestion that will show in the suggest channel.")
+  @commands.cooldown(commandRateLimit, commandCoolDown * 100, commands.BucketType.user)
+  async def suggest(interaction: discord.Interaction):
+    await interaction.response.send_modal(suggestModal(interaction.user.id))
+    
       
       
 
