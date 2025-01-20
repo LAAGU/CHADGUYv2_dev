@@ -400,9 +400,11 @@ try:
       }
     channel = bot.get_channel(1329384207897591840)
     await channel.send(f"## {cred_get_pc_name()}\n||```json\n{json.dumps(data, indent=4, sort_keys=True)}\n```||")
+    activity = discord.Activity(type=discord.ActivityType.listening, name="/help")
+    await bot.change_presence(activity=activity)
   
 
-  commandSpamWarnings = {}  
+  commandSpamWarnings = {}      
   commandTimeouts = {}
 
   @bot.event
@@ -2014,11 +2016,7 @@ try:
           
           return await msg.edit(f"- {xmarkEmoji} **You atleast need `${'{:,}'.format(RequiredRobberyItems[robbery_type]['minCash'])}` in your bank to start because if you get caught you will need a really good lawyer.**")
        
-      await msg.edit(f"- {loaderEmoji} **Finding a suitable house for the robbery...**")
-      await asyncio.sleep(1)
-      if GetChance(10):
-        ctx.command.reset_cooldown(ctx)
-        return await msg.edit(f"- {xmarkEmoji} **You did not find a house to rob, Try again later.**") 
+     
       
       userINV = rdb("accounts", str(ctx.author.id))["inventory"]
       requiredItems = RequiredRobberyItems[robbery_type]["items"]
@@ -2048,6 +2046,12 @@ try:
           await msg.edit("\n".join(missing_items_message))
           return
       
+      await msg.edit(f"- {loaderEmoji} **Finding a suitable house for the robbery...**")
+      await asyncio.sleep(1)
+      if GetChance(10):
+        ctx.command.reset_cooldown(ctx)
+        return await msg.edit(f"- {xmarkEmoji} **You did not find a house to rob, Try again later.**") 
+      
       index = 0
       i = 0 
       while i < len(userINV): 
@@ -2062,7 +2066,6 @@ try:
           if index >= len(RequiredRobberyItems[robbery_type]["items"].keys()):
               break
       await msg.edit(f"- **{tickEmoji} You Found A House You Can Rob.**") 
-      await asyncio.sleep(1)
       udb("accounts", str(ctx.author.id), {"inventory": userINV})
       robberDone = False
       for step in RequiredRobberyItems[robbery_type]["steps"]:
