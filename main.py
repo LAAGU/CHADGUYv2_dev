@@ -809,9 +809,9 @@ try:
       if (cashOnPerson <= 0):
           return await ctx.respond(f"- **{xmarkEmoji} There was no money in {user.display_name}'s wallet.**")
       if (cashOnPerson < 500):
-          cashFound = random.randint(1,cashOnPerson)
+          cashFound = random.randint(1,math.floor(cashOnPerson))
       else:
-          cashFound = random.randint(1, 5/100 * cashOnPerson)
+          cashFound = random.randint(1, math.floor(GetPercentage(10,cashOnPerson)))
       try:
           removeMoney(str(user.id),cashFound,"wallet")
           addMoney(str(ctx.author.id),cashFound,"wallet")
@@ -865,14 +865,16 @@ try:
               addMoney(str(ctx.author.id),robbedData['amount'] + costing,"wallet")
               return await ctx.followup.send(f"- **You also beat {user.display_name} and took all of their belongings costing `${'{:,}'.format(costing)}`**")
            else:
+              removeMoney(str(user.id),robbedData['amount'],"wallet")
+              addMoney(str(ctx.author.id),robbedData['amount'],"wallet")
               return await ctx.followup.send(f"- **You also beat {user.display_name} but they did not have any money on them**")
+       if userMoney["wallet"] - robbedData['amount'] > 500:
+          costing = random.randint(50,math.floor(GetPercentage(10,userMoney["wallet"])))
+          removeMoney(str(user.id),robbedData['amount'] + costing,"wallet")
+          addMoney(str(ctx.author.id),robbedData['amount'] + costing,"wallet")
+          return await ctx.followup.send(f"- **You also beat {user.display_name} and took all of their belongings costing `${'{:,}'.format(costing)}`**")    
        if userMoney["wallet"] - robbedData['amount'] > 5:
            costing = random.randint(1,5)
-           removeMoney(str(user.id),robbedData['amount'] + costing,"wallet")
-           addMoney(str(ctx.author.id),robbedData['amount'] + costing,"wallet")
-           return await ctx.followup.send(f"- **You also beat {user.display_name} and took all of their belongings costing `${'{:,}'.format(costing)}`**")
-       if userMoney["wallet"] - robbedData['amount'] > 500:
-           costing = random.randint(50,500)
            removeMoney(str(user.id),robbedData['amount'] + costing,"wallet")
            addMoney(str(ctx.author.id),robbedData['amount'] + costing,"wallet")
            return await ctx.followup.send(f"- **You also beat {user.display_name} and took all of their belongings costing `${'{:,}'.format(costing)}`**")

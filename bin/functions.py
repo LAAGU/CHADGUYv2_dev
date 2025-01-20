@@ -26,6 +26,8 @@ def GetChance(percentage: float) -> bool:
         raise ValueError("Percentage must be between 0 and 100 inclusive.")
     return random.uniform(0, 100) < percentage
 
+def GetPercentage(percentage: float,value: float | int) -> float | int:
+    return value * (percentage / 100)
 
 agentArray : list[dict] = [
         {
