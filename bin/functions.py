@@ -407,6 +407,36 @@ items: dict = {
             "emoji": "<:_emerald_ring:1330534225358880838>",
             "price": 4500,
             "class": "misc"
+        },
+        "plastic": {
+            "name": "Plastic",
+            "emoji": "<:_plastic:1331260065646252132>",
+            "price": -1,
+            "class": "scrap"
+        },
+        "steel": {
+            "name": "Steel",
+            "emoji": "<:_steel:1331276052495859722>",
+            "price": -1,
+            "class": "scrap"
+        },
+        "razer_blade": {
+            "name": "Razer Blade",
+            "emoji": "<:_blade:1331274274643640360>",
+            "price": 300,
+            "class": "utility"
+        },
+        "spring": {
+            "name": "Spring",
+            "emoji": "<:_spring:1331274278007603280>",
+            "price": 500,
+            "class": "scrap"
+        },
+        "polythene_bag": {
+            "name": "Polythene Bag",
+            "emoji": "<:_poly_bag:1331274280624853085>",
+            "price": -1,
+            "class": "scrap"
         }
 
 }
@@ -433,7 +463,7 @@ requiredRobberyItems : dict = {
             "bag":1
         },
         "reward_cash":[500,5000],
-        "reward_items":['phone','blue_gem','silver_chain','diamond_ring','ruby_ring','emerald_ring'],
+        "reward_items":['razer_blade','phone','blue_gem','silver_chain','diamond_ring','ruby_ring','emerald_ring'],
         "rewardItemCount":5,
         "rewardItemAmount":2
     },
@@ -461,12 +491,46 @@ craftingRecipes: dict = {
         {
             "item": "battery",
             "amount": 1
+        },
+        {
+            "item": "steel",
+            "amount": 3
+        },
+        {
+            "item": "plastic",
+            "amount": 50
         }
     ],
     "battery": [
         {
             "item": "cell",
             "amount": 3
+        }
+    ],
+    "steel": [
+        {
+            "item": "razer_blade",
+            "amount": 20
+        },
+        {
+            "item": "spring",
+            "amount": 15
+        }
+    ],
+    "plastic": [
+        {
+            "item": "polythene_bag",
+            "amount": 10
+        }
+    ],
+    "lockpick": [
+        {
+            "item": "steel",
+            "amount": 5
+        },
+        {
+            "item": "plastic",
+            "amount": 2
         }
     ]
 }
@@ -491,6 +555,9 @@ fishingCatchables = [
         {"id":"red_bass","max":1,"probibility":8},
         {"id":"green_bass","max":3,"probibility":12},
         {"id":"orange_bass","max":2,"probibility":10},
+        {"id":"razer_blade","max":10,"probibility":15},
+        {"id":"spring","max":20,"probibility":20},
+        {"id":"polythene_bag","max":10,"probibility":40}
 ]
 
 def GetRequiredRobberyItems() -> dict:

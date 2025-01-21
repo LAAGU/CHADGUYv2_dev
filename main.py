@@ -27,6 +27,10 @@ import platform
 import wmi
 import subprocess
 import requests
+from gtts import gTTS
+from langdetect import detect
+from googletrans import Translator
+from gtts.lang import tts_langs
 
 
 
@@ -723,7 +727,6 @@ try:
   
   @bot.slash_command(guild_ids=servers, name='register', description='Create an account.')
   @commands.cooldown(commandRateLimit,commandCoolDown * 3,commands.BucketType.user)
-  @isBetaUser()
   async def register(ctx):
       data = {
          "name": ctx.author.name,
@@ -2152,10 +2155,10 @@ try:
  
         @discord.ui.button(label="Edit", emoji="<:_edit:1330979809542799472>", style=discord.ButtonStyle.blurple,row=0)
         async def edit_button(self, button: Button, interaction: discord.Interaction):
-            await self.inter.delete_original_response()
+            await self.inter.edit_original_response(content=f"{loaderEmoji} **Editing...**",embed=None)
             await interaction.response.send_modal(suggestModal(interaction.user.id))
 
-        @discord.ui.button(label="Cancel", emoji=xmarkEmoji, style=discord.ButtonStyle.gray,row=2)
+        @discord.ui.button(label="Cancel", emoji=xmarkEmoji, style=discord.ButtonStyle.gray,row=0)
         async def cancel_button(self, button: Button, interaction: discord.Interaction):
              button.disabled = True
              button.label = "Canceled!"
@@ -2164,7 +2167,7 @@ try:
              await interaction.response.edit_message(content=f"{tickEmoji} **Suggestion Cancelled!**",view=self,embed=None) 
 
   class suggestModal(ui.Modal):
-    def __init__(self,userId):
+    def __init__(self,userId,inter : discord.Interaction=None):
         super().__init__(title="Create Suggestion",timeout = 500)
 
         self.text = ui.InputText(
@@ -2177,6 +2180,7 @@ try:
             value=modalInputs.get(str(userId), "")
         )
         self.add_item(self.text)
+        self.inter = inter
     
 
 
@@ -2184,15 +2188,103 @@ try:
         response = self.text.value
         modalInputs[str(interaction.user.id)] = response
         embed = discord.Embed(title="Suggestion Message Preview",description=f"{response}",color=discord.Color.yellow())
-        await interaction.response.send_message(embed=embed,view=confirmView(interaction),ephemeral=True)
+        if self.inter == None:
+         await interaction.response.send_message(embed=embed,view=confirmView(interaction),ephemeral=True)
+        else:
+         await self.inter.edit_original_response(embed=embed,view=confirmView(interaction),ephemeral=True)
+
+
+  class reportModal(ui.Modal):
+    def __init__(self):
+        super().__init__(title="Create Report",timeout = 500)
+
+        self.text = ui.InputText(
+            label="About your report",
+            placeholder="I would like to report that...",
+            required=True,
+            max_length=300,
+            style=discord.InputTextStyle.long,
+            min_length=5,
+        )
+        self.add_item(self.text)
+    
+
+
+    async def callback(self,interaction : discord.Interaction):
+        response = self.text.value
+        reportsChannel = bot.get_channel(1331212710175834122)
+        rid = GetRandomString(6,True)
+        embed = discord.Embed(title=f"Report #{interaction.user.id}-{rid}",description=f"- {response}",color=discord.Color.yellow())
+        embed.add_field(name=f"UserName -",value=f"{interaction.user.display_name}",inline=True)
+        await reportsChannel.send(content=f"@everyone",embed=embed)
+        await interaction.user.send(content=f"{tickEmoji} **You created a new report!, ID: `{rid}`**")
+        await interaction.response.send_message(content=f"{tickEmoji} **Report Sent!, ID: `{rid}`**",ephemeral=True)         
         
   @bot.slash_command(guild_ids=servers, name="suggest", description="To create a suggestion that will show in the suggest channel.")
   @commands.cooldown(commandRateLimit, commandCoolDown * 100, commands.BucketType.user)
   async def suggest(interaction: discord.Interaction):
     await interaction.response.send_modal(suggestModal(interaction.user.id))
     
+  @bot.slash_command(guild_ids=servers, name="report", description="Send a report to staff.")
+  @commands.cooldown(commandRateLimit, commandCoolDown * 10, commands.BucketType.user)
+  async def report(interaction: discord.Interaction):
+    await interaction.response.send_modal(reportModal())    
       
-      
+  def autocomplete_notify(ctx: discord.AutocompleteContext):
+    dict = tts_langs().keys()
+    return [tts_langs().get(lang) for lang in dict if ctx.value.lower() in lang.lower()]
+
+  @bot.slash_command(guild_ids=servers, name="notify", description="Make the bot join a VC and say something.")
+  @commands.cooldown(commandRateLimit, commandCoolDown * 5, commands.BucketType.user)
+  @captcha()
+  async def notify(ctx: discord.ApplicationContext, message: str, channel: discord.VoiceChannel,language: Annotated[str,Option(str, "Choose a language", autocomplete=autocomplete_notify)]):
+      if channel not in ctx.guild.voice_channels:
+          return await ctx.followup.send(content=f"- {xmarkEmoji} **Channel not found!**", ephemeral=True)
+  
+      try:
+          for key,value in tts_langs().items():
+            if value == language:
+                language = key
+                break
+
+
+  
+  
+          tts = gTTS(text=message, lang=language)
+          audio_file = f"notify-speech-{ctx.author.id}-{GetRandomString(4, True)}.mp3"
+          tts.save(audio_file)
+          
+          
+          
+          
+
+          try:
+            source = discord.FFmpegPCMAudio(audio_file, options='-vn', executable="ffmpeg.exe")    
+  
+            async def do_after_done():
+              os.remove(audio_file)
+              await ctx.voice_client.disconnect()
+
+            if ctx.voice_client is None:
+              await channel.connect()  
+  
+            ctx.voice_client.play(
+              source,
+              after=lambda e: asyncio.run_coroutine_threadsafe(do_after_done(), bot.loop).result()
+            )
+          except:
+           return await ctx.followup.send(content=f"- {xmarkEmoji} **`ffmpeg.exe` Not found in current host `{cred_get_pc_name()}`**", ephemeral=True)
+  
+          await ctx.followup.send(content=f"- {tickEmoji} **Speaking in the detected language:** `{tts_langs().get(language)}`", ephemeral=True)
+  
+      except Exception as e:
+            await ctx.followup.send(content=f"- {xmarkEmoji} **An error occurred:** `{e}`", ephemeral=True)
+
+
+    
+
+
+
 
 
 
