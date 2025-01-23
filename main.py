@@ -27,10 +27,16 @@ import platform
 import wmi
 import subprocess
 import requests
+
+
 from gtts import gTTS
-from langdetect import detect
-from googletrans import Translator
 from gtts.lang import tts_langs
+from pydub import AudioSegment
+import audioop
+from io import BytesIO
+import audioread
+import struct
+import tempfile
 
 
 
@@ -2233,57 +2239,185 @@ try:
   def autocomplete_notify(ctx: discord.AutocompleteContext):
     dict = tts_langs().keys()
     return [tts_langs().get(lang) for lang in dict if ctx.value.lower() in lang.lower()]
+  
+  def autocomplete_notify_b(ctx: discord.AutocompleteContext):
+    data = {
+        "com.au": "English (Australia)",
+        "co.uk": "English (United Kingdom)",
+        "us": "English (United States)",
+        "ca": "English (Canada)",
+        "co.in": "English (India)",
+        "ie": "English (Ireland)",
+        "co.za": "English (South Africa)",
+        "com.ng": "English (Nigeria)",
+        "fr": "French (France)",
+        "com.br": "Portuguese (Brazil)",
+        "pt": "Portuguese (Portugal)",
+        "com.mx": "Spanish (Mexico)",
+        "es": "Spanish (Spain)",
+    }
+    dict = data.keys()
+    return [data.get(lang) for lang in dict if ctx.value.lower() in lang.lower()]
+
+
+
 
   @bot.slash_command(guild_ids=servers, name="notify", description="Make the bot join a VC and say something.")
   @commands.cooldown(commandRateLimit, commandCoolDown * 5, commands.BucketType.user)
+  @excludeCMD(reason="This Command Is Out Of Service For Now.")
   @captcha()
-  async def notify(ctx: discord.ApplicationContext, message: str, channel: discord.VoiceChannel,language: Annotated[str,Option(str, "Choose a language", autocomplete=autocomplete_notify)]):
+  async def notify(
+      ctx: discord.ApplicationContext,
+      message: str,
+      channel: discord.VoiceChannel,
+      language: Annotated[str, Option(str, "Choose a language", autocomplete=autocomplete_notify,default="English")],
+      accent: Annotated[str, Option(str, "Choose a accent", autocomplete=autocomplete_notify_b,default="English (United States)")],
+      speed=0.5,
+      slow="False",
+      volume=1,
+  ):
       if channel not in ctx.guild.voice_channels:
           return await ctx.followup.send(content=f"- {xmarkEmoji} **Channel not found!**", ephemeral=True)
+
+      accent_data = {
+        "com.au": "English (Australia)",
+        "co.uk": "English (United Kingdom)",
+        "us": "English (United States)",
+        "ca": "English (Canada)",
+        "co.in": "English (India)",
+        "ie": "English (Ireland)",
+        "co.za": "English (South Africa)",
+        "com.ng": "English (Nigeria)",
+        "fr": "French (France)",
+        "com.br": "Portuguese (Brazil)",
+        "pt": "Portuguese (Portugal)",
+        "com.mx": "Spanish (Mexico)",
+        "es": "Spanish (Spain)",
+    }    
   
       try:
-          for key,value in tts_langs().items():
-            if value == language:
-                language = key
-                break
+          speed = float(speed)
+          volume = float(volume)
+          slow = slow.lower() in ["true","yes","yep","yea"]
 
+          for key, value in tts_langs().items():
+              if value == language:
+                  language = key
+                  break
 
+          for key, value in accent_data.items():
+              if value == accent:
+                  accent = key
+                  break      
   
+          tts = gTTS(text=message, lang=language,slow=slow)
+          mp3_audio = BytesIO()
+          tts.write_to_fp(mp3_audio)
+          mp3_audio.seek(0)
   
-          tts = gTTS(text=message, lang=language)
-          audio_file = f"notify-speech-{ctx.author.id}-{GetRandomString(4, True)}.mp3"
-          tts.save(audio_file)
-          
-          
-          
-          
-
-          try:
-            source = discord.FFmpegPCMAudio(audio_file, options='-vn', executable="ffmpeg.exe")    
+          wav_audio = convert_mp3_to_wav(mp3_audio,speed)
   
-            async def do_after_done():
-              os.remove(audio_file)
-              await ctx.voice_client.disconnect()
-
-            if ctx.voice_client is None:
-              await channel.connect()  
+          class PCMBytesAudioSource(discord.AudioSource):
+              def __init__(self, pcm_data):
+                  self.pcm_data = pcm_data
   
-            ctx.voice_client.play(
-              source,
-              after=lambda e: asyncio.run_coroutine_threadsafe(do_after_done(), bot.loop).result()
-            )
-          except:
-           return await ctx.followup.send(content=f"- {xmarkEmoji} **`ffmpeg.exe` Not found in current host `{cred_get_pc_name()}`**", ephemeral=True)
+              def read(self):
+                  return self.pcm_data.read(3840)
   
-          await ctx.followup.send(content=f"- {tickEmoji} **Speaking in the detected language:** `{tts_langs().get(language)}`", ephemeral=True)
+              def is_opus(self):
+                  return False
+  
+          if ctx.voice_client is None:
+              await channel.connect()
+          else:
+              await ctx.voice_client.move_to(channel)
+  
+          pcm_source = PCMBytesAudioSource(wav_audio)
+          ctx.voice_client.play(
+              discord.PCMVolumeTransformer(pcm_source, volume=volume),
+              after=lambda e: asyncio.run_coroutine_threadsafe(ctx.voice_client.disconnect(), bot.loop),
+          )
+  
+          await ctx.followup.send(
+              content=f"- {tickEmoji} **Speaking in the detected language:** `{tts_langs().get(language)}`", ephemeral=True
+          )
   
       except Exception as e:
-            await ctx.followup.send(content=f"- {xmarkEmoji} **An error occurred:** `{e}`", ephemeral=True)
+          await ctx.followup.send(content=f"- {xmarkEmoji} **An error occurred:** `{e}`", ephemeral=True)
+          if ctx.voice_client:
+              await ctx.voice_client.disconnect()
+  
+  
+  def convert_mp3_to_wav(mp3_audio, pitch_factor=0.5):
+    wav_audio = BytesIO()
 
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_mp3_file:
+        temp_mp3_file.write(mp3_audio.getvalue())
+        temp_mp3_file.close()
+
+        try:
+            with audioread.audio_open(temp_mp3_file.name) as decoder:
+                original_rate = decoder.samplerate
+                channels = decoder.channels
+
+                raw_pcm = b''.join([audioop.lin2lin(chunk, 2, 2) for chunk in decoder])
+
+                audio = AudioSegment(
+                    data=raw_pcm,
+                    sample_width=2, 
+                    frame_rate=original_rate,
+                    channels=channels
+                )
+                new_rate = int(audio.frame_rate * pitch_factor)
+                pitched_audio = audio._spawn(audio.raw_data, overrides={"frame_rate": new_rate})
+                pitched_audio = pitched_audio.set_frame_rate(48000)
+
+                raw_pcm = pitched_audio.raw_data
+                channels = pitched_audio.channels
+
+                wav_audio.write(b'RIFF')
+                wav_audio.write(b'\x00\x00\x00\x00')
+                wav_audio.write(b'WAVE')
+
+                wav_audio.write(b'fmt ')
+                wav_audio.write(struct.pack(
+                    '<IHHIIHH', 
+                    16,         
+                    1,         
+                    channels,    
+                    48000,      
+                    48000 * channels * 2, 
+                    channels * 2,  
+                    16       
+                ))
+
+
+                wav_audio.write(b'data')
+                wav_audio.write(struct.pack('<I', len(raw_pcm))) 
+                wav_audio.write(raw_pcm)
+
+         
+                wav_audio.seek(4)
+                wav_audio.write(struct.pack('<I', 36 + len(raw_pcm)))
+
+                wav_audio.seek(0) 
+        finally:
+            os.remove(temp_mp3_file.name)
+
+    return wav_audio
+
+  
 
     
 
-
+  @bot.slash_command(guild_ids=servers, name="uptime", description="Get the uptime of the bot.")
+  @commands.cooldown(commandRateLimit, commandCoolDown, commands.BucketType.user)
+  async def uptime(interaction: discord.Interaction):
+    elapsed_time = time.time() - start_benchmark
+    hours, remainder = divmod(elapsed_time, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    formatted_time = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
+    await interaction.response.send_message(content=f"- {tickEmoji} **Uptime:** `{formatted_time}`",ephemeral=True)
 
 
 

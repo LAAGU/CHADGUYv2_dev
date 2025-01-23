@@ -510,7 +510,7 @@ craftingRecipes: dict = {
     "steel": [
         {
             "item": "razer_blade",
-            "amount": 20
+            "amount": 10
         },
         {
             "item": "spring",
@@ -555,7 +555,7 @@ fishingCatchables = [
         {"id":"red_bass","max":1,"probibility":8},
         {"id":"green_bass","max":3,"probibility":12},
         {"id":"orange_bass","max":2,"probibility":10},
-        {"id":"razer_blade","max":10,"probibility":15},
+        {"id":"razer_blade","max":20,"probibility":25},
         {"id":"spring","max":20,"probibility":20},
         {"id":"polythene_bag","max":10,"probibility":40}
 ]
