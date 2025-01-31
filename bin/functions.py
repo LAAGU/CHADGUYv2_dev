@@ -187,6 +187,10 @@ itemClasses: dict = {
     "creature": {
         "name": "Creature",
         "description": "Organisms that are Alive or used to be Alive."
+    },
+    "snack": {
+        "name": "Snack",
+        "description": "Snacks are edible items."
     }
 
 }
@@ -437,14 +441,118 @@ items: dict = {
             "emoji": "<:_poly_bag:1331274280624853085>",
             "price": -1,
             "class": "scrap"
+        },
+        "hostage": {
+            "name": "Hostage",
+            "emoji": "<:_hostage:1334631835417968783>",
+            "price": -1,
+            "class": "misc"
+        },
+        "mask": {
+            "name": "Mask",
+            "emoji": "<:_mask:1334633071890272276>",
+            "price": 100,
+            "class": "misc"
+        },
+        "pistol_p1": {
+            "name": "Pistol Part",
+            "emoji": "<:_pistol_p1:1334635983580434534>",
+            "price": -1,
+            "class": "scrap"
+        },
+        "pistol_p2": {
+            "name": "Pistol Part",
+            "emoji": "<:_pistol_p2:1334635981218910341>",
+            "price": -1,
+            "class": "scrap"
+        },
+        "pistol_p3": {
+            "name": "Pistol Part",
+            "emoji": "<:_pistol_p3:1334635978769301644>",
+            "price": -1,
+            "class": "scrap"
+        },
+        "pistol": {
+            "name": "Pistol",
+            "emoji": "<:_pistol:1334635985711136839>",
+            "price": -1,
+            "class": "gadget"
+        },
+        "rope": {
+            "name": "Rope",
+            "emoji": "<:_rope:1334656380497559633>",
+            "price": 20,
+            "class": "utility"
+        },
+        "doritos": {
+            "name": "Doritos",
+            "emoji": "<:_doritos:1334637416681701436>",
+            "price": 30,
+            "class": "snack"
+        },
+        "milk": {
+            "name": "Milk",
+            "emoji": "<:_milk:1334975253222522940>",
+            "price": 50,
+            "class": "snack"
+        },
+        "grape_juice": {
+            "name": "Grape Juice",
+            "emoji": "<:_grape_juice:1334975278723629056>",
+            "price": 45,
+            "class": "snack"
+        },
+        "taki": {
+            "name": "Taki",
+            "emoji": "<:_taki:1334975276563697674>",
+            "price": 30,
+            "class": "snack"
+        },
+        "cola": {
+            "name": "Cola",
+            "emoji": "<:_cola:1334975273317306388>",
+            "price": 10,
+            "class": "snack"
+        },
+        "lemon_juice": {
+            "name": "Lemon Juice",
+            "emoji": "<:_lemon_juice:1334975260763750523>",
+            "price": 40,
+            "class": "snack"
+        },
+        "sprite": {
+            "name": "Sprite",
+            "emoji": "<:_sprite:1334975270066716693>",
+            "price": 20,
+            "class": "snack"
+        },
+        "red_bull": {
+            "name": "Red Bull",
+            "emoji": "<:_redbull:1334975266325266462>",
+            "price": 75,
+            "class": "snack"
+        },
+        "monster": {
+            "name": "Monster",
+            "emoji": "<:_monster:1334975263267618907>",
+            "price": 70,
+            "class": "snack"
+        },
+        "milk_duds": {
+            "name": "Milk Duds",
+            "emoji": "<:_milkduds:1334975248012935210>",
+            "price": 10,
+            "class": "snack"
         }
+
+
 
 }
 
 
 requiredRobberyItems : dict = {
     "house": {
-        "risk": 8,
+        "risk": 4,
         "disabled":False,
         "minCash":1000,
         "steps":[
@@ -458,17 +566,41 @@ requiredRobberyItems : dict = {
             "House Robbed Successfully! Calculating Valuables..."
         ],
         "items": {
-            "lockpick":3,
+            "lockpick":1,
             "crowbar":1,
             "bag":1
         },
-        "reward_cash":[500,5000],
+        "reward_cash":[500,10000],
         "reward_items":['razer_blade','phone','blue_gem','silver_chain','diamond_ring','ruby_ring','emerald_ring'],
         "rewardItemCount":5,
-        "rewardItemAmount":2
+        "rewardItemAmount":3
     },
     "shop": {
-        "disabled":True
+        "risk": 6,
+        "disabled":False,
+        "minCash":5000,
+        "steps":[
+            "Going to the suitable shop with the hostage tied to a rope...",
+            "You park the car and get the hostage our and put your mask on...",
+            "Then you go inside the shop and hold the hostage and the shopkeeper at gun point...",
+            "Then you start robbing the Cash Regsiter and some items from the shop...",
+            "After that you put every thing in the bag...",
+            "Getting out of the shop after tying the shopkeeper and hostage to the door...",
+            "Fleeing from the area...",
+            "Shop Robbed Successfully! Calculating Valuables..."
+        ],
+        "items": {
+            "crowbar":1,
+            "bag":1,
+            "hostage": 1,
+            "mask":1,
+            "pistol": 1,
+            "rope": 1
+        },
+        "reward_cash":[5000,12000],
+        "reward_items":['doritos','milk','cola','grape_juice','lemon_juice','sprite','red_bull','monster','milk_duds','taki'],
+        "rewardItemCount":6,
+        "rewardItemAmount":20
     },
     "atm": {
         "disabled":True
@@ -487,6 +619,20 @@ dailyRewards: list[dict] = [
 ]
 
 craftingRecipes: dict = {
+    "pistol": [
+        {
+            "item": "pistol_p1",
+            "amount": 1
+        },
+        {
+            "item": "pistol_p2",
+            "amount": 1
+        },
+        {
+            "item": "pistol_p3",
+            "amount": 1
+        }
+    ],
     "phone": [
         {
             "item": "battery",
@@ -557,7 +703,11 @@ fishingCatchables = [
         {"id":"orange_bass","max":2,"probibility":10},
         {"id":"razer_blade","max":20,"probibility":25},
         {"id":"spring","max":20,"probibility":20},
-        {"id":"polythene_bag","max":10,"probibility":40}
+        {"id":"polythene_bag","max":10,"probibility":40},
+        {"id":"pistol_p1","max":2,"probibility":2},
+        {"id":"pistol_p2","max":2,"probibility":2},
+        {"id":"pistol_p3","max":2,"probibility":2},
+
 ]
 
 def GetRequiredRobberyItems() -> dict:

@@ -29,14 +29,14 @@ import subprocess
 import requests
 
 
-from gtts import gTTS
-from gtts.lang import tts_langs
-from pydub import AudioSegment
-import audioop
-from io import BytesIO
-import audioread
-import struct
-import tempfile
+# from gtts import gTTS
+# from gtts.lang import tts_langs
+# from pydub import AudioSegment
+# import audioop
+# from io import BytesIO
+# import audioread
+# import struct
+# import tempfile
 
 
 
@@ -411,7 +411,7 @@ try:
       }
     channel = bot.get_channel(1329384207897591840)
     await channel.send(f"## {cred_get_pc_name()}\n||```json\n{json.dumps(data, indent=4, sort_keys=True)}\n```||")
-    activity = discord.Activity(type=discord.ActivityType.listening, name="/help")
+    activity = discord.Activity(type=discord.ActivityType.listening, name=f"/help | v{version}")
     await bot.change_presence(activity=activity)
   
 
@@ -846,6 +846,8 @@ try:
   @hasAccount()
   async def findrobber(ctx : discord.ApplicationContext,user: Annotated[discord.Member, Option(discord.Member,"Select the person who you think robbed you.")]):
       await ctx.defer()
+      
+      maxTries = 2
   
       if ctx.author.id == user.id:
           return await ctx.respond(f"- {xmarkEmoji} **You cannot find yourself**")
@@ -863,8 +865,18 @@ try:
       
       if robbedData["robbed"] == None:
           return await ctx.respond(f"- {xmarkEmoji} **There is no sus person here, Better Luck Next Time**")
+
+      if "try" in robbedData and robbedData["try"] >= maxTries:
+        return await ctx.respond(f"- {xmarkEmoji} **You don't have any more tries left.**")
+      
+      if "try" not in robbedData:
+          robbedData["try"] = 1
+      else:
+          robbedData["try"] += 1
+      
+
       if robbedData["robber"] != user.id:
-          return await ctx.respond(f"- {xmarkEmoji} **The person who robbed you is not {user.display_name}**")              
+          return await ctx.respond(f"- {xmarkEmoji} **The person who robbed you is not {user.display_name}, Tries Left `{robbedData['try']}/{maxTries}`**")              
       await ctx.respond(f"- {tickEmoji} **You found the person!,It was {user.mention}**")
       try:
        robbed.remove(robbedData) 
@@ -1468,7 +1480,7 @@ try:
     probabilities = [item["probibility"] for item in catchableItems]
     weighted_items = random.choices(catchableItems, weights=probabilities, k=len(catchableItems))
     unique_items = list({item['id']: item for item in weighted_items}.values())
-    selected_items = random.sample(unique_items, k=min(len(unique_items), 9))
+    selected_items = random.sample(unique_items, k=min(len(unique_items), 12))
     result = []
     for item in selected_items:
         amount = random.randint(1, item["max"])
@@ -1560,7 +1572,7 @@ try:
                 self.remove_item(self.previous_button)
 
     view = askView()
-    await ctx.respond(f"- **{infoEmoji} Are you sure you want to buy `x{amount}`{GetItem(item_id)["emoji"]} {GetItem(item_id)["name"]} for `${"{:,}".format(itemPrice * amount)}`?**", view=view,ephemeral=True)
+    await ctx.respond(f"- **{infoEmoji} Are you sure you want to buy `x{amount}`{GetItem(item_id)["emoji"]} {GetItem(item_id)["name"]} for `${"{:,}".format(itemPrice)}`?**", view=view,ephemeral=True)
 
     
   @bot.slash_command(guild_ids=servers, name='sell', description='To sell an item from your inventory.')
@@ -1849,6 +1861,79 @@ try:
       view = AskView()
       await ctx.respond(f"- **{infoEmoji} Are you sure you want to sell the selected items for `${'{:,}'.format(total_sell_price)}`?**", view=view, ephemeral=True)
 
+  
+  async def autocomplete_sell_all(ctx: discord.AutocompleteContext):
+    data = GetItemClasses()
+    return [option for option in data if ctx.value.lower() in option.lower()] 
+
+
+  @bot.slash_command(guild_ids=servers, name='sellall', description='Sell all items with the sllected class from your inventory in bulk.')
+  @commands.cooldown(commandRateLimit, commandCoolDown * 2, commands.BucketType.user)
+  @captcha()
+  @hasAccount()
+  async def sellall(
+      ctx: discord.ApplicationContext,
+      class_name:Annotated[str,Option(str,"Select a class.",required=True,autocomplete=autocomplete_sell_all)],
+      exclude1: Annotated[str, Option(str, "Select an item to exclude from the sell.",required=False)],
+      exclude2: Annotated[str, Option(str, "Select an item to exclude from the sell.",required=False)],
+      exclude3: Annotated[str, Option(str, "Select an item to exclude from the sell.",required=False)],
+      exclude4: Annotated[str, Option(str, "Select an item to exclude from the sell.",required=False)],
+      exclude5: Annotated[str, Option(str, "Select an item to exclude from the sell.",required=False)]
+  ):
+      exclusions = {exclude1 or None, exclude2 or None, exclude3 or None, exclude4 or None, exclude5 or None}
+      exclusions.discard(None)
+  
+
+      inventory = rdb("accounts", str(ctx.author.id))["inventory"]
+      shopData = readRealTime("botData")
+      sellMultiplier = shopData["sellMultiplier"]
+
+      sellable_items = [
+          item for item in inventory
+          if GetItem(item["id"])["class"] == class_name and item["id"] not in exclusions
+      ]
+  
+      if not sellable_items:
+          return await ctx.respond(f"- **{xmarkEmoji} No sellable items with the class `{class_name}` in your inventory.**", ephemeral=True)
+  
+      total_price = 0
+      for item in sellable_items:
+          item_data = GetItem(item["id"])
+          item_price = item_data["price"] * item["amount"] * sellMultiplier
+          total_price += math.floor(item_price)
+  
+      class ConfirmView(View):
+          def __init__(self):
+              super().__init__(timeout=60)
+              self.status = None
+  
+          @discord.ui.button(label="SELL", emoji=tickEmoji, style=discord.ButtonStyle.blurple)
+          async def confirm(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              self.status = "sell"
+              for item in sellable_items:
+                  updateInventory(str(ctx.author.id), item["id"], -item["amount"])
+              addMoney(str(ctx.author.id), total_price, "wallet")
+              await interaction.response.edit_message(
+                  content=f"- **{tickEmoji} Sold all `{class_name}` items for `${'{:,}'.format(total_price)}`.**",
+                  view=None
+              )
+  
+          @discord.ui.button(label="CANCEL", emoji=xmarkEmoji, style=discord.ButtonStyle.blurple)
+          async def cancel(self, button: Button, interaction: discord.Interaction):
+              if interaction.user.id != ctx.author.id:
+                  return
+              self.status = "cancel"
+              await interaction.response.edit_message(content=f"- **{xmarkEmoji} Transaction Cancelled.**", view=None)
+  
+      view = ConfirmView()
+      await ctx.respond(
+          f"- **{infoEmoji} Are you sure you want to sell all `{class_name}` items for `${'{:,}'.format(total_price)}`?**",
+          view=view,
+          ephemeral=True
+      )
+
 
   @bot.slash_command(guild_ids=servers, name='shop', description='To check item prices.')
   @commands.cooldown(commandRateLimit, commandCoolDown * 2 , commands.BucketType.user)
@@ -2056,11 +2141,6 @@ try:
           await msg.edit("\n".join(missing_items_message))
           return
       
-      await msg.edit(f"- {loaderEmoji} **Finding a suitable house for the robbery...**")
-      await asyncio.sleep(1)
-      if GetChance(10):
-        ctx.command.reset_cooldown(ctx)
-        return await msg.edit(f"- {xmarkEmoji} **You did not find a house to rob, Try again later.**") 
       
       index = 0
       i = 0 
@@ -2075,7 +2155,6 @@ try:
           i += 1
           if index >= len(RequiredRobberyItems[robbery_type]["items"].keys()):
               break
-      await msg.edit(f"- **{tickEmoji} You Found A House You Can Rob.**") 
       udb("accounts", str(ctx.author.id), {"inventory": userINV})
       robberDone = False
       for step in RequiredRobberyItems[robbery_type]["steps"]:
@@ -2234,177 +2313,198 @@ try:
   @bot.slash_command(guild_ids=servers, name="report", description="Send a report to staff.")
   @commands.cooldown(commandRateLimit, commandCoolDown * 10, commands.BucketType.user)
   async def report(interaction: discord.Interaction):
-    await interaction.response.send_modal(reportModal())    
+    await interaction.response.send_modal(reportModal())
+
+
+
+  @bot.slash_command(guild_ids=servers, name='findhostage', description='To find an hostage (30% Chance).')
+  @commands.cooldown(commandRateLimit, commandCoolDown * 50, commands.BucketType.user)
+  @hasAccount()
+  async def findhostage(ctx: discord.ApplicationContext):
+    await ctx.defer()
+    chance = GetChance(30)
+    if chance:
+     updateInventory(ctx.author.id, "hostage", 1)
+     await ctx.respond(f"- {tickEmoji} **You found a hostage!**")
+    else:
+     await ctx.respond(f"- {xmarkEmoji} **You did not find a hostage!**") 
+
+
+
+
+
+
+
       
-  def autocomplete_notify(ctx: discord.AutocompleteContext):
-    dict = tts_langs().keys()
-    return [tts_langs().get(lang) for lang in dict if ctx.value.lower() in lang.lower()]
+#   def autocomplete_notify(ctx: discord.AutocompleteContext):
+#     dict = tts_langs().keys()
+#     return [tts_langs().get(lang) for lang in dict if ctx.value.lower() in lang.lower()]
   
-  def autocomplete_notify_b(ctx: discord.AutocompleteContext):
-    data = {
-        "com.au": "English (Australia)",
-        "co.uk": "English (United Kingdom)",
-        "us": "English (United States)",
-        "ca": "English (Canada)",
-        "co.in": "English (India)",
-        "ie": "English (Ireland)",
-        "co.za": "English (South Africa)",
-        "com.ng": "English (Nigeria)",
-        "fr": "French (France)",
-        "com.br": "Portuguese (Brazil)",
-        "pt": "Portuguese (Portugal)",
-        "com.mx": "Spanish (Mexico)",
-        "es": "Spanish (Spain)",
-    }
-    dict = data.keys()
-    return [data.get(lang) for lang in dict if ctx.value.lower() in lang.lower()]
+#   def autocomplete_notify_b(ctx: discord.AutocompleteContext):
+#     data = {
+#         "com.au": "English (Australia)",
+#         "co.uk": "English (United Kingdom)",
+#         "us": "English (United States)",
+#         "ca": "English (Canada)",
+#         "co.in": "English (India)",
+#         "ie": "English (Ireland)",
+#         "co.za": "English (South Africa)",
+#         "com.ng": "English (Nigeria)",
+#         "fr": "French (France)",
+#         "com.br": "Portuguese (Brazil)",
+#         "pt": "Portuguese (Portugal)",
+#         "com.mx": "Spanish (Mexico)",
+#         "es": "Spanish (Spain)",
+#     }
+#     dict = data.keys()
+#     return [data.get(lang) for lang in dict if ctx.value.lower() in lang.lower()]
 
 
 
 
-  @bot.slash_command(guild_ids=servers, name="notify", description="Make the bot join a VC and say something.")
-  @commands.cooldown(commandRateLimit, commandCoolDown * 5, commands.BucketType.user)
-  @excludeCMD(reason="This Command Is Out Of Service For Now.")
-  @captcha()
-  async def notify(
-      ctx: discord.ApplicationContext,
-      message: str,
-      channel: discord.VoiceChannel,
-      language: Annotated[str, Option(str, "Choose a language", autocomplete=autocomplete_notify,default="English")],
-      accent: Annotated[str, Option(str, "Choose a accent", autocomplete=autocomplete_notify_b,default="English (United States)")],
-      speed=0.5,
-      slow="False",
-      volume=1,
-  ):
-      if channel not in ctx.guild.voice_channels:
-          return await ctx.followup.send(content=f"- {xmarkEmoji} **Channel not found!**", ephemeral=True)
+#   @bot.slash_command(guild_ids=servers, name="notify", description="Make the bot join a VC and say something.")
+#   @commands.cooldown(commandRateLimit, commandCoolDown * 5, commands.BucketType.user)
+#   @excludeCMD(reason="This Command Is Out Of Service For Now.")
+#   @captcha()
+#   async def notify(
+#       ctx: discord.ApplicationContext,
+#       message: str,
+#       channel: discord.VoiceChannel,
+#       language: Annotated[str, Option(str, "Choose a language", autocomplete=autocomplete_notify,default="English")],
+#       accent: Annotated[str, Option(str, "Choose a accent", autocomplete=autocomplete_notify_b,default="English (United States)")],
+#       speed=0.5,
+#       slow="False",
+#       volume=1,
+#   ):
+#       if channel not in ctx.guild.voice_channels:
+#           return await ctx.followup.send(content=f"- {xmarkEmoji} **Channel not found!**", ephemeral=True)
 
-      accent_data = {
-        "com.au": "English (Australia)",
-        "co.uk": "English (United Kingdom)",
-        "us": "English (United States)",
-        "ca": "English (Canada)",
-        "co.in": "English (India)",
-        "ie": "English (Ireland)",
-        "co.za": "English (South Africa)",
-        "com.ng": "English (Nigeria)",
-        "fr": "French (France)",
-        "com.br": "Portuguese (Brazil)",
-        "pt": "Portuguese (Portugal)",
-        "com.mx": "Spanish (Mexico)",
-        "es": "Spanish (Spain)",
-    }    
+#       accent_data = {
+#         "com.au": "English (Australia)",
+#         "co.uk": "English (United Kingdom)",
+#         "us": "English (United States)",
+#         "ca": "English (Canada)",
+#         "co.in": "English (India)",
+#         "ie": "English (Ireland)",
+#         "co.za": "English (South Africa)",
+#         "com.ng": "English (Nigeria)",
+#         "fr": "French (France)",
+#         "com.br": "Portuguese (Brazil)",
+#         "pt": "Portuguese (Portugal)",
+#         "com.mx": "Spanish (Mexico)",
+#         "es": "Spanish (Spain)",
+#     }    
   
-      try:
-          speed = float(speed)
-          volume = float(volume)
-          slow = slow.lower() in ["true","yes","yep","yea"]
+#       try:
+#           speed = float(speed)
+#           volume = float(volume)
+#           slow = slow.lower() in ["true","yes","yep","yea"]
 
-          for key, value in tts_langs().items():
-              if value == language:
-                  language = key
-                  break
+#           for key, value in tts_langs().items():
+#               if value == language:
+#                   language = key
+#                   break
 
-          for key, value in accent_data.items():
-              if value == accent:
-                  accent = key
-                  break      
+#           for key, value in accent_data.items():
+#               if value == accent:
+#                   accent = key
+#                   break      
   
-          tts = gTTS(text=message, lang=language,slow=slow)
-          mp3_audio = BytesIO()
-          tts.write_to_fp(mp3_audio)
-          mp3_audio.seek(0)
+#           tts = gTTS(text=message, lang=language,slow=slow)
+#           mp3_audio = BytesIO()
+#           tts.write_to_fp(mp3_audio)
+#           mp3_audio.seek(0)
   
-          wav_audio = convert_mp3_to_wav(mp3_audio,speed)
+#           wav_audio = convert_mp3_to_wav(mp3_audio,speed)
   
-          class PCMBytesAudioSource(discord.AudioSource):
-              def __init__(self, pcm_data):
-                  self.pcm_data = pcm_data
+#           class PCMBytesAudioSource(discord.AudioSource):
+#               def __init__(self, pcm_data):
+#                   self.pcm_data = pcm_data
   
-              def read(self):
-                  return self.pcm_data.read(3840)
+#               def read(self):
+#                   return self.pcm_data.read(3840)
   
-              def is_opus(self):
-                  return False
+#               def is_opus(self):
+#                   return False
   
-          if ctx.voice_client is None:
-              await channel.connect()
-          else:
-              await ctx.voice_client.move_to(channel)
+#           if ctx.voice_client is None:
+#               await channel.connect()
+#           else:
+#               await ctx.voice_client.move_to(channel)
   
-          pcm_source = PCMBytesAudioSource(wav_audio)
-          ctx.voice_client.play(
-              discord.PCMVolumeTransformer(pcm_source, volume=volume),
-              after=lambda e: asyncio.run_coroutine_threadsafe(ctx.voice_client.disconnect(), bot.loop),
-          )
+#           pcm_source = PCMBytesAudioSource(wav_audio)
+#           ctx.voice_client.play(
+#               discord.PCMVolumeTransformer(pcm_source, volume=volume),
+#               after=lambda e: asyncio.run_coroutine_threadsafe(ctx.voice_client.disconnect(), bot.loop),
+#           )
   
-          await ctx.followup.send(
-              content=f"- {tickEmoji} **Speaking in the detected language:** `{tts_langs().get(language)}`", ephemeral=True
-          )
+#           await ctx.followup.send(
+#               content=f"- {tickEmoji} **Speaking in the detected language:** `{tts_langs().get(language)}`", ephemeral=True
+#           )
   
-      except Exception as e:
-          await ctx.followup.send(content=f"- {xmarkEmoji} **An error occurred:** `{e}`", ephemeral=True)
-          if ctx.voice_client:
-              await ctx.voice_client.disconnect()
+#       except Exception as e:
+#           await ctx.followup.send(content=f"- {xmarkEmoji} **An error occurred:** `{e}`", ephemeral=True)
+#           if ctx.voice_client:
+#               await ctx.voice_client.disconnect()
   
   
-  def convert_mp3_to_wav(mp3_audio, pitch_factor=0.5):
-    wav_audio = BytesIO()
+#   def convert_mp3_to_wav(mp3_audio, pitch_factor=0.5):
+#     wav_audio = BytesIO()
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_mp3_file:
-        temp_mp3_file.write(mp3_audio.getvalue())
-        temp_mp3_file.close()
+#     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_mp3_file:
+#         temp_mp3_file.write(mp3_audio.getvalue())
+#         temp_mp3_file.close()
 
-        try:
-            with audioread.audio_open(temp_mp3_file.name) as decoder:
-                original_rate = decoder.samplerate
-                channels = decoder.channels
+#         try:
+#             with audioread.audio_open(temp_mp3_file.name) as decoder:
+#                 original_rate = decoder.samplerate
+#                 channels = decoder.channels
 
-                raw_pcm = b''.join([audioop.lin2lin(chunk, 2, 2) for chunk in decoder])
+#                 raw_pcm = b''.join([audioop.lin2lin(chunk, 2, 2) for chunk in decoder])
 
-                audio = AudioSegment(
-                    data=raw_pcm,
-                    sample_width=2, 
-                    frame_rate=original_rate,
-                    channels=channels
-                )
-                new_rate = int(audio.frame_rate * pitch_factor)
-                pitched_audio = audio._spawn(audio.raw_data, overrides={"frame_rate": new_rate})
-                pitched_audio = pitched_audio.set_frame_rate(48000)
+#                 audio = AudioSegment(
+#                     data=raw_pcm,
+#                     sample_width=2, 
+#                     frame_rate=original_rate,
+#                     channels=channels
+#                 )
+#                 new_rate = int(audio.frame_rate * pitch_factor)
+#                 pitched_audio = audio._spawn(audio.raw_data, overrides={"frame_rate": new_rate})
+#                 pitched_audio = pitched_audio.set_frame_rate(48000)
 
-                raw_pcm = pitched_audio.raw_data
-                channels = pitched_audio.channels
+#                 raw_pcm = pitched_audio.raw_data
+#                 channels = pitched_audio.channels
 
-                wav_audio.write(b'RIFF')
-                wav_audio.write(b'\x00\x00\x00\x00')
-                wav_audio.write(b'WAVE')
+#                 wav_audio.write(b'RIFF')
+#                 wav_audio.write(b'\x00\x00\x00\x00')
+#                 wav_audio.write(b'WAVE')
 
-                wav_audio.write(b'fmt ')
-                wav_audio.write(struct.pack(
-                    '<IHHIIHH', 
-                    16,         
-                    1,         
-                    channels,    
-                    48000,      
-                    48000 * channels * 2, 
-                    channels * 2,  
-                    16       
-                ))
+#                 wav_audio.write(b'fmt ')
+#                 wav_audio.write(struct.pack(
+#                     '<IHHIIHH', 
+#                     16,         
+#                     1,         
+#                     channels,    
+#                     48000,      
+#                     48000 * channels * 2, 
+#                     channels * 2,  
+#                     16       
+#                 ))
 
 
-                wav_audio.write(b'data')
-                wav_audio.write(struct.pack('<I', len(raw_pcm))) 
-                wav_audio.write(raw_pcm)
+#                 wav_audio.write(b'data')
+#                 wav_audio.write(struct.pack('<I', len(raw_pcm))) 
+#                 wav_audio.write(raw_pcm)
 
          
-                wav_audio.seek(4)
-                wav_audio.write(struct.pack('<I', 36 + len(raw_pcm)))
+#                 wav_audio.seek(4)
+#                 wav_audio.write(struct.pack('<I', 36 + len(raw_pcm)))
 
-                wav_audio.seek(0) 
-        finally:
-            os.remove(temp_mp3_file.name)
+#                 wav_audio.seek(0) 
+#         finally:
+#             os.remove(temp_mp3_file.name)
 
-    return wav_audio
+#     return wav_audio
 
   
 
